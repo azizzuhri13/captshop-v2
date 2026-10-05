@@ -1,0 +1,86 @@
+@extends('layouts.admin')
+
+@section('title', 'Pengaturan')
+@section('page-title', 'Pengaturan')
+
+@section('content')
+    <form action="{{ route('admin.settings.update') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
+        @csrf
+        @method('PUT')
+
+        @foreach ([
+            'Situs' => ['site_name', 'site_description', 'site_logo', 'site_favicon', 'maintenance_mode'],
+            'Kontak' => ['contact_whatsapp', 'contact_email', 'contact_instagram', 'contact_facebook'],
+        ] as $sectionTitle => $keys)
+            <section class="rounded-xl border border-slate-800 bg-slate-800/40 p-5">
+                <h2 class="mb-4 font-heading text-sm font-bold text-slate-200">{{ $sectionTitle }}</h2>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    @foreach ($keys as $key)
+                        <div @class(['sm:col-span-2' => in_array($key, ['site_description'])])>
+                            <label class="mb-1.5 block text-sm font-medium text-slate-300">{{ $schema[$key] }}</label>
+
+                            @if (in_array($key, $fileKeys))
+                                {{-- Unggahan file (logo & favicon) --}}
+                                @if (! empty($settings[$key]))
+                                    <div class="mb-2 flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2">
+                                        <img src="{{ $settings[$key] }}" alt="Pratinjau {{ $schema[$key] }}" class="{{ $key === 'site_favicon' ? 'h-8 w-8' : 'h-10 w-10' }} shrink-0 rounded-md bg-slate-800 object-contain p-1">
+                                        <span class="min-w-0 truncate text-[11px] text-slate-500" title="{{ $settings[$key] }}">Saat ini: {{ $settings[$key] }}</span>
+                                    </div>
+                                @endif
+                                <input
+                                    type="file"
+                                    name="{{ $key }}"
+                                    accept="image/*,.ico,.svg"
+                                    class="block w-full text-sm text-slate-400 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:font-medium file:text-white hover:file:bg-primary-dark"
+                                >
+                                <p class="mt-1 text-[11px] text-slate-600">PNG, JPG, GIF, SVG, atau ICO — maks. 2 MB. Biarkan kosong untuk mempertahankan yang sekarang.</p>
+                                @error($key)<p class="mt-1.5 text-xs text-red-400">{{ $message }}</p>@enderror
+                            @elseif ($key === 'site_description')
+                                <textarea name="settings[{{ $key }}]" rows="2" class="input-dark">{{ old('settings.'.$key, $settings[$key] ?? '') }}</textarea>
+                            @else
+                                <input type="text" name="settings[{{ $key }}]" value="{{ old('settings.'.$key, $settings[$key] ?? '') }}" class="input-dark">
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </section>
+        @endforeach
+
+        @foreach ([
+            '💳 Payment Gateway (Tripay)' => ['tripay_api_key', 'tripay_base_url'],
+            '🔌 Supplier (DigiFlazz)' => ['digiflazz_username', 'digiflazz_api_key', 'digiflazz_base_url'],
+            '💬 WhatsApp Gateway (Fonnte)' => ['fonnte_token', 'fonnte_base_url'],
+        ] as $sectionTitle => $keys)
+            <section class="rounded-xl border border-primary/30 bg-primary/5 p-5">
+                <h2 class="mb-4 font-heading text-sm font-bold text-slate-200">{{ $sectionTitle }}</h2>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    @foreach ($keys as $key)
+                        <div>
+                            <label class="mb-1.5 block text-sm font-medium text-slate-300">{{ $schema[$key] }}</label>
+                            <input
+                                type="password"
+                                name="settings[{{ $key }}]"
+                                class="input-dark"
+                                autocomplete="new-password"
+                                placeholder="{{ ($settings[$key] ?? '') ? '•••• (tersimpan — biarkan kosong untuk mempertahankan)' : 'Belum diset (pakai .env)' }}"
+                            >
+                            @if (($settings[$key] ?? '') !== '')
+                                <label class="mt-1.5 flex items-center gap-2 text-[11px] text-slate-500">
+                                    <input type="checkbox" name="clear_settings[{{ $key }}]" value="1" class="rounded border-slate-600 bg-slate-800 text-primary focus:ring-primary">
+                                    Hapus nilai tersimpan (kembali ke .env)
+                                </label>
+                            @endif
+                            <p class="mt-1 text-[11px] text-slate-600">Kosongkan untuk memakai nilai dari file .env</p>
+                        </div>
+                    @endforeach
+                </div>
+            </section>
+        @endforeach
+
+        <div class="flex gap-2">
+            <button type="submit" class="btn-primary">💾 Simpan Pengaturan</button>
+        </div>
+    </form>
+@endsection

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -D - -o /tmp/app.js -m 10 -H \"Origin: http://localhost:8000\" \"http://127.0.0.1:5173/resources/js/app.js\")",
+      "Read(//tmp/**)",
+      "Bash(rm -f \"/c/Users/ZIO/.claude/projects/D--captshop/memory/vite-csp-dev-asset-block.md\")",
+      "Read(//c/Users/ZIO/.claude/projects/D--captshop/memory//**)"
+    ]
+  }
+}
