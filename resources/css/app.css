@@ -23,7 +23,7 @@
     }
 
     .input-dark {
-        @apply w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-slate-100 placeholder-slate-500 transition focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary;
+        @apply min-w-0 w-full max-w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-slate-100 placeholder-slate-500 transition focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary;
     }
 }
 

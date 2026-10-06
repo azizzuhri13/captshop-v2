@@ -15,15 +15,15 @@
             <section class="rounded-xl border border-slate-800 bg-slate-800/40 p-5">
                 <h2 class="mb-4 font-heading text-sm font-bold text-slate-200">{{ $sectionTitle }}</h2>
 
-                <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     @foreach ($keys as $key)
-                        <div @class(['sm:col-span-2' => in_array($key, ['site_description'])])>
+                        <div @class(['min-w-0', 'sm:col-span-2' => in_array($key, ['site_description'])])>
                             <label class="mb-1.5 block text-sm font-medium text-slate-300">{{ $schema[$key] }}</label>
 
                             @if (in_array($key, $fileKeys))
                                 {{-- Unggahan file (logo & favicon) --}}
                                 @if (! empty($settings[$key]))
-                                    <div class="mb-2 flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2">
+                                    <div class="mb-2 flex min-w-0 w-full items-center gap-3 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2">
                                         <img src="{{ $settings[$key] }}" alt="Pratinjau {{ $schema[$key] }}" class="{{ $key === 'site_favicon' ? 'h-8 w-8' : 'h-10 w-10' }} shrink-0 rounded-md bg-slate-800 object-contain p-1">
                                         <span class="min-w-0 truncate text-[11px] text-slate-500" title="{{ $settings[$key] }}">Saat ini: {{ $settings[$key] }}</span>
                                     </div>
