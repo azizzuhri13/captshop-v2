@@ -90,6 +90,30 @@ class AdminPanelTest extends TestCase
         $this->assertDatabaseHas('categories', ['slug' => 'voucher', 'name' => 'Voucher']);
     }
 
+    public function test_unchecked_popular_checkbox_clears_existing_popular_flag(): void
+    {
+        $this->loginAdmin();
+
+        $category = Category::create(['name' => 'Games', 'slug' => 'games']);
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'Free Fire',
+            'slug' => 'free-fire',
+            'is_popular' => true,
+        ]);
+
+        $response = $this->put("/admin/products/{$product->id}", [
+            'category_id' => $category->id,
+            'name' => 'Free Fire',
+            'slug' => 'free-fire',
+            'input_fields' => '[]',
+            'is_active' => '1',
+        ]);
+
+        $response->assertRedirect(route('admin.products.index'));
+        $this->assertDatabaseHas('products', ['id' => $product->id, 'is_popular' => false]);
+    }
+
     public function test_admin_can_create_product_with_input_fields(): void
     {
         $this->loginAdmin();

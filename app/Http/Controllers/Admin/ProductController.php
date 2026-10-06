@@ -34,6 +34,7 @@ class ProductController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $this->validated($request);
+        $validated['is_popular'] = $request->boolean('is_popular');
 
         $validated['icon'] = $request->hasFile('icon') ? $request->file('icon')->store('products', 'public') : null;
         $validated['banner'] = $request->hasFile('banner') ? $request->file('banner')->store('products', 'public') : null;
@@ -53,6 +54,7 @@ class ProductController extends Controller
     public function update(Request $request, Product $product): RedirectResponse
     {
         $validated = $this->validated($request, $product->id);
+        $validated['is_popular'] = $request->boolean('is_popular');
 
         if ($request->hasFile('icon')) {
             $this->deleteImageFile($product->icon);
