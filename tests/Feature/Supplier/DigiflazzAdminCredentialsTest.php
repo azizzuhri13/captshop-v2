@@ -25,6 +25,7 @@ class DigiflazzAdminCredentialsTest extends TestCase
         $this->assertSame(12345.0, $result['balance']);
         Http::assertSent(fn ($request) => $request->url() === 'https://api.digiflazz.com/v1/cek-saldo'
             && $request['username'] === 'admin-user'
-            && $request['sign'] === md5('admin-user'.'admin-key'.'deposits'));
+            && $request['sign'] === md5('admin-user'.'admin-key'.'depo')
+            && $request['cmd'] === 'deposit');
     }
 }

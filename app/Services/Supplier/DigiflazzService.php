@@ -44,9 +44,9 @@ class DigiflazzService implements SupplierInterface
     public function checkBalance(): array
     {
         $result = $this->client->post('/cek-saldo', [
-            'cmd' => 'saldo',
+            'cmd' => 'deposit',
             'username' => $this->username(),
-            'sign' => md5($this->username().$this->apiKey().'deposits'),
+            'sign' => md5($this->username().$this->apiKey().'depo'),
         ]);
 
         return [
