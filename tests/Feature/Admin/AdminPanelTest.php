@@ -155,6 +155,9 @@ class AdminPanelTest extends TestCase
             'is_active' => true,
         ]);
 
+        $this->get('/admin/payment-channels')->assertStatus(200)->assertSee('Channel Pembayaran')->assertSee('overflow-x-auto');
+        $this->get("/admin/payment-channels/{$channel->id}/edit")->assertStatus(200)->assertSee('Edit Channel');
+
         // Update fee.
         $this->put("/admin/payment-channels/{$channel->id}", [
             'name' => 'QRIS',
