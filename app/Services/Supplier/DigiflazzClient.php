@@ -49,7 +49,8 @@ class DigiflazzClient
 
     protected function request(): PendingRequest
     {
-        if (empty(config('supplier.digiflazz.username')) || empty(config('supplier.digiflazz.api_key'))) {
+        if (! Credentials::get('digiflazz_username', config('supplier.digiflazz.username'))
+            || ! Credentials::get('digiflazz_api_key', config('supplier.digiflazz.api_key'))) {
             throw SupplierException::notConfigured();
         }
 
