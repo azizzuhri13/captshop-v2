@@ -30,7 +30,11 @@ class BelibayarClient
         [$key, $secret, $base, $prefix] = $this->settings();
         $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         try {
-            $response = Http::timeout(20)->withHeaders([
+            $response = Http::timeout(20)->withOptions([
+                'curl' => [
+                    CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+                ],
+            ])->withHeaders([
                 'X-Api-Key' => $key,
                 'X-Signature' => hash_hmac('sha256', $body, $secret),
                 'Content-Type' => 'application/json',
@@ -48,18 +52,27 @@ class BelibayarClient
             throw PaymentException::requestFailed('Referensi pembayaran tidak valid.');
         }
         $timestamp = (string) time();
-        $response = Http::timeout(20)->withHeaders([
-            'X-Api-Key' => $key,
-            'X-Timestamp' => $timestamp,
-            'X-Signature' => hash_hmac('sha256', ':'.$timestamp, $secret),
-        ])->get($base.$prefix.'/payment/status/'.$reference);
-        return $this->unwrap($response, 'status');
+        try {
+            $response = Http::timeout(20)->withOptions([
+                'curl' => [
+                    CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+                ],
+            ])->withHeaders([
+                'X-Api-Key' => $key,
+                'X-Timestamp' => $timestamp,
+                'X-Signature' => hash_hmac('sha256', ':'.$timestamp, $secret),
+            ])->get($base.$prefix.'/payment/status/'.$reference);
+            return $this->unwrap($response, 'status');
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            throw PaymentException::requestFailed('Koneksi status Belibayar gagal atau timeout; coba lagi beberapa saat.');
+        }
     }
 
     private function unwrap($response, string $operation): array
     {
         if (! $response->successful() || $response->json('success') !== true || ! is_array($response->json('data'))) {
-            throw PaymentException::requestFailed('Belibayar '.$operation.' gagal (HTTP '.$response->status().').');
+            $message = $response->json('messages') ?? $response->json('message') ?? ('HTTP '.$response->status());
+            throw PaymentException::requestFailed('Belibayar '.$operation.' gagal: '.$message);
         }
         return $response->json('data');
     }

@@ -56,6 +56,11 @@ class DigiflazzClient
 
         return Http::baseUrl($this->baseUrl)
             ->timeout(60)
+            ->withOptions([
+                'curl' => [
+                    CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+                ],
+            ])
             ->acceptJson();
     }
 }

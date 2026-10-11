@@ -124,7 +124,7 @@ class OrderService
                         || ! is_int($payment['expired_at'] ?? null)
                         || $payment['expired_at'] <= now()->timestamp
                         || ($needsCode && empty($payment['va_number']))
-                        || ($channel->code === 'QRIS' && empty($payment['qr_url']))
+                        || ($channel->code === 'QRIS' && empty($payment['qr_url']) && empty($payment['qr_code']))
                         || ($needsRedirect && empty($payment['payment_url']))) {
                     throw PaymentException::requestFailed('Respons pembayaran Belibayar tidak lengkap atau tidak cocok.');
                 }
@@ -134,7 +134,7 @@ class OrderService
                     'payment_instructions' => [
                         'va_number' => $payment['va_number'] ?? null,
                         'qr_content' => $payment['qr_content'] ?? null,
-                        'qr_url' => $payment['qr_url'] ?? null,
+                        'qr_url' => $payment['qr_url'] ?? $payment['qr_code'] ?? null,
                     ],
                     'expired_at' => \Illuminate\Support\Carbon::createFromTimestamp($payment['expired_at']),
                 ])->save();
