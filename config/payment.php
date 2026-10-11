@@ -1,25 +1,14 @@
 <?php
 
 return [
-
-    /*
-    |--------------------------------------------------------------------------
-    | Payment Gateway
-    |--------------------------------------------------------------------------
-    |
-    | Gateway default yang dipakai saat membuat transaksi pembayaran.
-    | Arsitektur multi-gateway (fallback Midtrans) menyusul di fase lanjutan.
-    |
-    */
-
-    'default' => env('PAYMENT_GATEWAY', 'tripay'),
-
-    'tripay' => [
-        'api_key' => env('TRIPAY_API_KEY'),
-        'private_key' => env('TRIPAY_PRIVATE_KEY'),
-        'merchant_code' => env('TRIPAY_MERCHANT_CODE'),
-        'base_url' => env('TRIPAY_BASE_URL', 'https://tripay.co.id/api'),
-        'callback_url' => env('TRIPAY_CALLBACK_URL'),
+    // Belibayar adalah satu-satunya gateway pembayaran untuk pesanan baru.
+    'default' => 'belibayar',
+    'belibayar' => [
+        'mode' => env('BELIBAYAR_MODE', 'sandbox'),
+        'base_url' => env('BELIBAYAR_BASE_URL', 'https://api.belibayar.id'),
+        'api_key' => env('BELIBAYAR_API_KEY'),
+        'secret_key' => env('BELIBAYAR_SECRET_KEY'),
+        'webhook_secret' => env('BELIBAYAR_WEBHOOK_SECRET'),
+        'merchant_id' => env('BELIBAYAR_MERCHANT_ID'),
     ],
-
 ];

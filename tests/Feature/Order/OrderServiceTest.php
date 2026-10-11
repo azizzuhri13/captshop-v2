@@ -20,7 +20,7 @@ class OrderServiceTest extends TestCase
     protected function seedOrderFixture(): array
     {
         $channel = PaymentChannel::create([
-            'gateway' => 'tripay',
+            'gateway' => 'belibayar',
             'code' => 'QRIS',
             'name' => 'QRIS',
             'group' => 'QRIS',
@@ -60,9 +60,9 @@ class OrderServiceTest extends TestCase
         [$channel, $product, $item] = $this->seedOrderFixture();
 
         $gateway = $this->mock(PaymentGatewayInterface::class);
-        $gateway->shouldReceive('gatewayName')->andReturn('tripay');
+        $gateway->shouldReceive('gatewayName')->andReturn('belibayar');
         $gateway->shouldReceive('createTransaction')->once()->andReturnUsing(function ($transaction) {
-            return ['reference' => 'TRIPAY-REF-001', 'checkout_url' => 'https://tripay.example/pay/1'];
+            return ['reference' => $transaction->invoice_id, 'transaction_id' => 'byrtrx_order', 'payment_channel' => 'QRIS', 'amount' => (int) $transaction->total, 'status' => 'pending', 'qr_url' => 'https://link.belibayar.id/test.png', 'expired_at' => now()->addHour()->timestamp];
         });
         $this->app->instance(PaymentGatewayInterface::class, $gateway);
 
@@ -81,8 +81,8 @@ class OrderServiceTest extends TestCase
         $this->assertSame('105.00', $transaction->fee);
         $this->assertSame('15105.00', $transaction->total);
         $this->assertSame('2000.00', $transaction->profit);
-        $this->assertSame('TRIPAY-REF-001', $transaction->payment_ref);
-        $this->assertSame('https://tripay.example/pay/1', $transaction->payment_url);
+        $this->assertSame('byrtrx_order', $transaction->payment_ref);
+        $this->assertNull($transaction->payment_url);
         $this->assertNotNull($transaction->expired_at);
     }
 
@@ -104,12 +104,12 @@ class OrderServiceTest extends TestCase
         ]);
     }
 
-    public function test_place_stays_pending_when_gateway_fails(): void
+    public function test_place_rolls_back_when_gateway_fails(): void
     {
         [$channel, $product, $item] = $this->seedOrderFixture();
 
         $gateway = $this->mock(PaymentGatewayInterface::class);
-        $gateway->shouldReceive('gatewayName')->andReturn('tripay');
+        $gateway->shouldReceive('gatewayName')->andReturn('belibayar');
         $gateway->shouldReceive('createTransaction')->once()->andThrow(
             new PaymentException('gateway down')
         );
@@ -117,7 +117,8 @@ class OrderServiceTest extends TestCase
 
         $service = $this->app->make(OrderService::class);
 
-        $transaction = $service->place([
+        $this->expectException(PaymentException::class);
+        $service->place([
             'product_item_id' => $item->id,
             'paid_channel' => null,
             'payment_channel' => 'QRIS',
@@ -125,7 +126,5 @@ class OrderServiceTest extends TestCase
             'customer_phone' => '081234567890',
         ]);
 
-        $this->assertSame('pending', $transaction->status);
-        $this->assertNull($transaction->payment_ref);
     }
 }

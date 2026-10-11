@@ -57,14 +57,14 @@ class SecurityHardeningTest extends TestCase
 
     public function test_settings_page_does_not_leak_stored_secrets(): void
     {
-        SiteSetting::set('tripay_api_key', 'SECRET-TRIPAY-KEY-123');
+        SiteSetting::set('belibayar_api_key', 'SECRET-BELIBAYAR-KEY-123');
 
         $this->actingAs($this->superAdmin(), 'admin');
 
         $response = $this->get(route('admin.settings.edit'));
 
         $response->assertOk();
-        $this->assertStringNotContainsString('SECRET-TRIPAY-KEY-123', $response->getContent());
+        $this->assertStringNotContainsString('SECRET-BELIBAYAR-KEY-123', $response->getContent());
         $this->assertStringNotContainsString('value="SECRET', $response->getContent());
     }
 
@@ -200,7 +200,7 @@ class SecurityHardeningTest extends TestCase
         // Admin panel & webhook tetap bisa diakses (403 = signature invalid,
         // artinya request lolos middleware maintenance dan sampai controller).
         $this->get(route('admin.login'))->assertOk();
-        $this->postJson('/webhook/tripay', [])->assertStatus(403);
+        $this->postJson('/webhook/belibayar', [])->assertStatus(403);
 
         SiteSetting::set('maintenance_mode', 'false');
 

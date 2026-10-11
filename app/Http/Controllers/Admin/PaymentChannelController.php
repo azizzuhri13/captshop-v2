@@ -14,6 +14,7 @@ class PaymentChannelController extends Controller
     public function index(): View
     {
         $channels = PaymentChannel::query()
+            ->where('gateway', 'belibayar')
             ->orderBy('group')
             ->orderBy('sort_order')
             ->get()
@@ -24,11 +25,13 @@ class PaymentChannelController extends Controller
 
     public function edit(PaymentChannel $paymentChannel): View
     {
+        abort_unless($paymentChannel->gateway === 'belibayar', 404);
         return view('admin.payment-channels.edit', compact('paymentChannel'));
     }
 
     public function update(Request $request, PaymentChannel $paymentChannel): RedirectResponse
     {
+        abort_unless($paymentChannel->gateway === 'belibayar', 404);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'group' => ['required', 'string', 'max:50'],
@@ -54,6 +57,7 @@ class PaymentChannelController extends Controller
      */
     public function toggle(PaymentChannel $paymentChannel): RedirectResponse
     {
+        abort_unless($paymentChannel->gateway === 'belibayar', 404);
         $old = ['is_active' => $paymentChannel->is_active];
 
         $paymentChannel->update(['is_active' => ! $paymentChannel->is_active]);

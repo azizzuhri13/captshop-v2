@@ -4,7 +4,7 @@ namespace App\Providers;
 
 use App\Models\Admin;
 use App\Services\Payment\PaymentGatewayInterface;
-use App\Services\Payment\TripayService;
+use App\Services\Payment\BelibayarService;
 use App\Services\Supplier\DigiflazzService;
 use App\Services\Supplier\SupplierInterface;
 use Illuminate\Support\Facades\Gate;
@@ -39,12 +39,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(PaymentGatewayInterface::class, function ($app) {
-            return match (config('payment.default')) {
-                'tripay' => $app->make(TripayService::class),
-                default => $app->make(TripayService::class),
-            };
-        });
+        $this->app->bind(PaymentGatewayInterface::class, BelibayarService::class);
 
         $this->app->bind(SupplierInterface::class, function ($app) {
             return match (config('supplier.default')) {

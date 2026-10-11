@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('payment_channels', function (Blueprint $table) {
             $table->id();
-            $table->string('gateway'); // tripay, midtrans, manual
+            $table->string('gateway'); // payment provider identifier
             $table->string('code'); // kode channel di gateway, mis. BRIVA, QRIS
             $table->string('name'); // nama tampilan, mis. BCA Virtual Account
             $table->string('group'); // Virtual Account, E-Wallet, Retail, QRIS

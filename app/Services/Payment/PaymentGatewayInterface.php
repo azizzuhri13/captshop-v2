@@ -7,7 +7,7 @@ use App\Models\Transaction;
 interface PaymentGatewayInterface
 {
     /**
-     * Nama gateway (mis. tripay, midtrans).
+     * Nama gateway (belibayar).
      */
     public function gatewayName(): string;
 

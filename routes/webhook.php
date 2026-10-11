@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\Webhook\TripayController;
+use App\Http\Controllers\Webhook\BelibayarController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -14,5 +14,5 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('webhook')->group(function () {
-    Route::post('/tripay', [TripayController::class, 'handle'])->middleware('throttle:60,1');
+    Route::post('/belibayar', [BelibayarController::class, 'handle'])->middleware('throttle:60,1');
 });

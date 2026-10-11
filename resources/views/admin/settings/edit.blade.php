@@ -48,7 +48,7 @@
         @endforeach
 
         @foreach ([
-            '💳 Payment Gateway (Tripay)' => ['tripay_api_key', 'tripay_base_url'],
+            'Payment Gateway (Belibayar)' => ['belibayar_api_key', 'belibayar_secret_key', 'belibayar_webhook_secret', 'belibayar_merchant_id'],
             '🔌 Supplier (DigiFlazz)' => ['digiflazz_username', 'digiflazz_api_key', 'digiflazz_base_url'],
             '💬 WhatsApp Gateway (Fonnte)' => ['fonnte_token', 'fonnte_base_url'],
         ] as $sectionTitle => $keys)

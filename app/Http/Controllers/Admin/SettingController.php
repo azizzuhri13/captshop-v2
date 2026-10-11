@@ -31,9 +31,11 @@ class SettingController extends Controller
         // Maintenance
         'maintenance_mode' => 'Maintenance Mode (true/false)',
 
-        // Integrasi — Payment Gateway (Tripay)
-        'tripay_api_key' => 'Tripay API Key',
-        'tripay_base_url' => 'Tripay Base URL',
+        // Integrasi — Belibayar (secret tersimpan terpisah dari tampilan)
+        'belibayar_api_key' => 'Belibayar API Key',
+        'belibayar_secret_key' => 'Belibayar Secret Key',
+        'belibayar_webhook_secret' => 'Belibayar Webhook Secret',
+        'belibayar_merchant_id' => 'Belibayar Merchant ID',
 
         // Integrasi — Supplier (DigiFlazz)
         'digiflazz_username' => 'DigiFlazz Username',
@@ -51,7 +53,10 @@ class SettingController extends Controller
      * ulang — input kosong berarti mempertahankan nilai tersimpan.
      */
     protected const SECRET_KEYS = [
-        'tripay_api_key',
+        'belibayar_api_key',
+        'belibayar_secret_key',
+        'belibayar_webhook_secret',
+        'belibayar_merchant_id',
         'digiflazz_api_key',
         'fonnte_token',
     ];

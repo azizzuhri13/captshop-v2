@@ -223,11 +223,12 @@
                     </div>
 
                     <div>
-                        <label for="customer_email" class="mb-1.5 block text-sm font-medium text-slate-300">Email (opsional)</label>
+                        <label for="customer_email" class="mb-1.5 block text-sm font-medium text-slate-300">Email {{ config('payment.default') === 'belibayar' ? '*' : '(opsional)' }}</label>
                         <input
                             type="email"
                             id="customer_email"
                             name="customer_email"
+                            @if (config('payment.default') === 'belibayar') required @endif
                             placeholder="nama@email.com"
                             x-model="form.customer_email"
                             class="input-dark"

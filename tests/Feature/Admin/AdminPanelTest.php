@@ -146,7 +146,7 @@ class AdminPanelTest extends TestCase
         $this->loginAdmin();
 
         $channel = PaymentChannel::create([
-            'gateway' => 'tripay',
+            'gateway' => 'belibayar',
             'code' => 'QRIS',
             'name' => 'QRIS',
             'group' => 'QRIS',

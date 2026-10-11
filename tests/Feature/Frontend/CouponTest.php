@@ -39,7 +39,7 @@ class CouponTest extends TestCase
         ]);
 
         $channel = PaymentChannel::create([
-            'gateway' => 'tripay',
+            'gateway' => 'belibayar',
             'code' => 'QRIS',
             'name' => 'QRIS',
             'group' => 'QRIS',
@@ -54,10 +54,12 @@ class CouponTest extends TestCase
     protected function mockGateway(): void
     {
         $gateway = $this->mock(PaymentGatewayInterface::class);
-        $gateway->shouldReceive('gatewayName')->andReturn('tripay');
-        $gateway->shouldReceive('createTransaction')->andReturn([
-            'reference' => 'TRIPAY-REF-COUPON',
-            'checkout_url' => 'https://tripay.example/pay/coupon',
+        $gateway->shouldReceive('gatewayName')->andReturn('belibayar');
+        $gateway->shouldReceive('createTransaction')->andReturnUsing(fn ($transaction) => [
+            'reference' => $transaction->invoice_id, 'transaction_id' => 'byrtrx_coupon',
+            'payment_channel' => 'QRIS', 'amount' => (int) $transaction->total,
+            'status' => 'pending', 'qr_url' => 'https://link.belibayar.id/test.png',
+            'expired_at' => now()->addHour()->timestamp,
         ]);
         $this->app->instance(PaymentGatewayInterface::class, $gateway);
     }
@@ -159,6 +161,7 @@ class CouponTest extends TestCase
             'payment_channel' => 'QRIS',
             'customer_data' => ['user_id' => '12345678'],
             'customer_phone' => '081234567890',
+            'customer_email' => 'buyer@example.com',
             'coupon_code' => 'hemat10',
         ]);
 
@@ -167,12 +170,12 @@ class CouponTest extends TestCase
         $this->assertNotNull($transaction);
         $response->assertRedirect(route('invoice.show', $transaction->invoice_id));
 
-        // amount 15000, diskon 10% = 1500, fee 0.7% x 13500 = 94.5 -> 94.5, total 13594.5 -> 13594.5
+        // Biaya dibulatkan ke IDR bulat agar total sama dengan nominal Belibayar.
         $this->assertSame('15000.00', $transaction->amount);
         $this->assertSame('HEMAT10', $transaction->coupon_code);
         $this->assertSame('1500.00', $transaction->coupon_discount);
-        $this->assertSame('94.50', $transaction->fee);
-        $this->assertSame('13594.50', $transaction->total);
+        $this->assertSame('95.00', $transaction->fee);
+        $this->assertSame('13595.00', $transaction->total);
         $this->assertSame(1, $coupon->fresh()->used_count);
     }
 
@@ -194,6 +197,7 @@ class CouponTest extends TestCase
             'payment_channel' => 'QRIS',
             'customer_data' => ['user_id' => '12345678'],
             'customer_phone' => '081234567890',
+            'customer_email' => 'buyer@example.com',
             'coupon_code' => 'LAMA',
         ]);
 
@@ -211,6 +215,7 @@ class CouponTest extends TestCase
             'payment_channel' => 'QRIS',
             'customer_data' => ['user_id' => '12345678'],
             'customer_phone' => '081234567890',
+            'customer_email' => 'buyer@example.com',
         ]);
 
         $transaction = Transaction::query()->first();

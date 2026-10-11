@@ -61,8 +61,9 @@ class OrderService
         $coupon = $this->resolveCoupon((string) ($data['coupon_code'] ?? ''), $amount);
         $discount = $coupon?->calculateDiscount($amount) ?? 0.0;
 
-        $fee = $channel->calculateFee($amount - $discount);
-        $total = round($amount - $discount + $fee, 2);
+        // Belibayar menerima nominal IDR bulat; tampilkan dan tagih jumlah yang sama.
+        $fee = round($channel->calculateFee($amount - $discount));
+        $total = round($amount - $discount + $fee);
         $profit = round($amount - $discount - (float) $item->buy_price, 2);
 
         return DB::transaction(function () use ($item, $channel, $data, $amount, $coupon, $discount, $fee, $total, $profit) {
@@ -80,6 +81,7 @@ class OrderService
                 'coupon_discount' => (string) $discount,
                 'payment_method' => $channel->group,
                 'payment_channel' => $channel->code,
+                'payment_gateway' => $this->gateway->gatewayName(),
                 'status' => 'pending',
                 'expired_at' => now()->addHours(self::PAYMENT_EXPIRY_HOURS),
             ]);
@@ -108,17 +110,40 @@ class OrderService
                     'sku' => $item->supplier_item_code ?? $transaction->invoice_id,
                 ]);
 
+                if ($this->gateway->gatewayName() !== 'belibayar') {
+                    throw PaymentException::requestFailed('Gateway pembayaran tidak didukung.');
+                }
+                $needsCode = in_array($channel->group, ['Virtual Account', 'Retail'], true);
+                $needsRedirect = in_array($channel->code, ['DANA', 'SPAY', 'ASTRA', 'SC'], true);
+                if (($payment['reference'] ?? null) !== $transaction->invoice_id
+                        || ! is_string($payment['transaction_id'] ?? null)
+                        || ! is_int($payment['amount'] ?? null)
+                        || $payment['amount'] !== (int) $transaction->total
+                        || ($payment['payment_channel'] ?? null) !== $channel->code
+                        || ($payment['status'] ?? null) !== 'pending'
+                        || ! is_int($payment['expired_at'] ?? null)
+                        || $payment['expired_at'] <= now()->timestamp
+                        || ($needsCode && empty($payment['va_number']))
+                        || ($channel->code === 'QRIS' && empty($payment['qr_url']))
+                        || ($needsRedirect && empty($payment['payment_url']))) {
+                    throw PaymentException::requestFailed('Respons pembayaran Belibayar tidak lengkap atau tidak cocok.');
+                }
                 $transaction->forceFill([
-                    'payment_ref' => $payment['reference'] ?? $payment['merchant_ref'] ?? null,
-                    'payment_url' => $payment['checkout_url'] ?? $payment['payment_url'] ?? null,
+                    'payment_ref' => $payment['transaction_id'],
+                    'payment_url' => $payment['payment_url'] ?? null,
+                    'payment_instructions' => [
+                        'va_number' => $payment['va_number'] ?? null,
+                        'qr_content' => $payment['qr_content'] ?? null,
+                        'qr_url' => $payment['qr_url'] ?? null,
+                    ],
+                    'expired_at' => \Illuminate\Support\Carbon::createFromTimestamp($payment['expired_at']),
                 ])->save();
             } catch (PaymentException $e) {
-                Log::warning('Gagal membuat transaksi gateway, pesanan tetap tersimpan sebagai pending.', [
+                Log::warning('Gagal membuat transaksi Belibayar; pesanan dibatalkan.', [
                     'invoice_id' => $transaction->invoice_id,
                     'error' => $e->getMessage(),
                 ]);
-
-                $transaction->save();
+                throw $e; // Rollback transaksi & penggunaan kupon; jangan buat invoice tanpa instruksi bayar.
             }
 
             return $transaction;
