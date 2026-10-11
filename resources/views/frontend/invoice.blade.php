@@ -110,7 +110,10 @@
                 @endforeach
                 <div class="flex justify-between gap-4">
                     <dt class="text-slate-500">No. WhatsApp</dt>
-                    <dd class="text-right font-medium text-slate-200">{{ $transaction->customer_phone }}</dd>
+                    @php($rawPhone = (string) $transaction->customer_phone)
+                    <dd class="text-right font-medium text-slate-200">
+                        {{ strlen($rawPhone) > 7 ? substr($rawPhone, 0, 4).'****'.substr($rawPhone, -3) : $rawPhone }}
+                    </dd>
                 </div>
                 <div class="flex justify-between gap-4">
                     <dt class="text-slate-500">Harga</dt>

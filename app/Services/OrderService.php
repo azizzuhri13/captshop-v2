@@ -88,12 +88,16 @@ class OrderService
 
             if ($coupon !== null) {
                 // Increment atomik agar kuota tidak lolos pada order konkuren.
-                Coupon::query()
+                $updated = Coupon::query()
                     ->whereKey($coupon->id)
                     ->where(function ($query) {
                         $query->where('max_usage', 0)->orWhereRaw('used_count < max_usage');
                     })
                     ->increment('used_count');
+
+                if ($coupon->max_usage > 0 && $updated === 0) {
+                    throw new \InvalidArgumentException('Kuota kupon telah habis.');
+                }
             }
 
             try {

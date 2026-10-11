@@ -211,4 +211,44 @@ class SecurityHardeningTest extends TestCase
     {
         $this->get('/')->assertOk();
     }
+
+    public function test_settings_rejects_svg_upload_for_logo(): void
+    {
+        Storage::fake('public');
+        $this->actingAs($this->superAdmin(), 'admin');
+
+        $svgFile = UploadedFile::fake()->create('malicious.svg', 10, 'image/svg+xml');
+
+        $response = $this->put(route('admin.settings.update'), [
+            'site_logo' => $svgFile,
+        ]);
+
+        $response->assertSessionHasErrors('site_logo');
+    }
+
+    public function test_cannot_demote_or_deactivate_last_active_super_admin(): void
+    {
+        $admin = $this->superAdmin();
+        $this->actingAs($admin, 'admin');
+
+        $response = $this->put(route('admin.accounts.update', $admin), [
+            'name' => 'Super Admin',
+            'email' => $admin->email,
+            'role' => 'operator',
+            'is_active' => '1',
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertSame('super_admin', $admin->fresh()->role);
+
+        $responseDeactivate = $this->put(route('admin.accounts.update', $admin), [
+            'name' => 'Super Admin',
+            'email' => $admin->email,
+            'role' => 'super_admin',
+            'is_active' => '0',
+        ]);
+
+        $responseDeactivate->assertSessionHas('error');
+        $this->assertTrue($admin->fresh()->is_active);
+    }
 }

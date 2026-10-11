@@ -228,4 +228,31 @@ class CouponTest extends TestCase
         $this->assertSame('105.00', $transaction->fee); // 0.7% x 15000
         $this->assertSame('15105.00', $transaction->total);
     }
+
+    public function test_order_rejected_when_coupon_quota_exhausted_during_placement(): void
+    {
+        [$category, $product, $item, $channel] = $this->seedFixture();
+        $this->mockGateway();
+
+        $coupon = Coupon::create([
+            'code' => 'HABIS',
+            'discount_type' => 'nominal',
+            'discount_value' => '1000',
+            'max_usage' => 1,
+            'used_count' => 1,
+            'is_active' => true,
+        ]);
+
+        $response = $this->post('/order', [
+            'product_item_id' => $item->id,
+            'payment_channel' => 'QRIS',
+            'customer_data' => ['user_id' => '12345678'],
+            'customer_phone' => '081234567890',
+            'customer_email' => 'buyer@example.com',
+            'coupon_code' => 'HABIS',
+        ]);
+
+        $response->assertSessionHasErrors('order');
+        $this->assertSame(0, Transaction::count());
+    }
 }

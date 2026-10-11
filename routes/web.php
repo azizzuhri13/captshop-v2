@@ -36,6 +36,7 @@ Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap')
 
 Route::get('/invoice/{invoiceId}', [InvoiceController::class, 'show'])
     ->where('invoiceId', '[A-Z0-9\-]+')
+    ->middleware('throttle:60,1')
     ->name('invoice.show');
 
 Route::post('/invoice/{invoiceId}/check-status', [InvoiceController::class, 'checkStatus'])

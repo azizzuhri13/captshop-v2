@@ -98,9 +98,9 @@ class SettingController extends Controller
             'clear_settings' => ['nullable', 'array'],
             'clear_settings.*' => ['boolean'],
             // Rule `image` Laravel tidak mengenali .ico, jadi validasi mime
-            // dilakukan eksplisit agar favicon .ico tetap diterima.
-            'site_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,svg,ico', 'max:2048'],
-            'site_favicon' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,svg,ico', 'max:2048'],
+            // dilakukan eksplisit agar favicon .ico tetap diterima. SVG dilarang untuk mencegah Stored XSS.
+            'site_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp,ico', 'max:2048'],
+            'site_favicon' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp,ico', 'max:2048'],
         ]);
 
         $changes = [];

@@ -31,10 +31,10 @@
                                 <input
                                     type="file"
                                     name="{{ $key }}"
-                                    accept="image/*,.ico,.svg"
+                                    accept="image/png,image/jpeg,image/gif,image/webp,.ico"
                                     class="block w-full text-sm text-slate-400 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-2 file:font-medium file:text-white hover:file:bg-primary-dark"
                                 >
-                                <p class="mt-1 text-[11px] text-slate-600">PNG, JPG, GIF, SVG, atau ICO — maks. 2 MB. Biarkan kosong untuk mempertahankan yang sekarang.</p>
+                                <p class="mt-1 text-[11px] text-slate-600">PNG, JPG, GIF, WebP, atau ICO — maks. 2 MB. Biarkan kosong untuk mempertahankan yang sekarang.</p>
                                 @error($key)<p class="mt-1.5 text-xs text-red-400">{{ $message }}</p>@enderror
                             @elseif ($key === 'site_description')
                                 <textarea name="settings[{{ $key }}]" rows="2" class="input-dark">{{ old('settings.'.$key, $settings[$key] ?? '') }}</textarea>
