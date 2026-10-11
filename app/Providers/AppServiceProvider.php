@@ -7,7 +7,10 @@ use App\Services\Payment\PaymentGatewayInterface;
 use App\Services\Payment\BelibayarService;
 use App\Services\Supplier\DigiflazzService;
 use App\Services\Supplier\SupplierInterface;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -67,5 +70,9 @@ class AppServiceProvider extends ServiceProvider
         foreach ($abilities as $ability => $roles) {
             Gate::define($ability, fn (Admin $admin) => in_array($admin->role, $roles, true));
         }
+
+        RateLimiter::for('orders', function (Request $request) {
+            return Limit::perMinute(10)->by($request->ip());
+        });
     }
 }
