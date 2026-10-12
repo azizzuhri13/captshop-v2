@@ -8,6 +8,10 @@
 
         <x-category-grid :categories="$categories" />
 
+        @if ($premiumAppsProducts->isNotEmpty())
+            <x-apps-premium-slider :products="$premiumAppsProducts" :category="$premiumAppsCategory" />
+        @endif
+
         @if ($flashSaleItems->isNotEmpty())
             <x-flash-sale :items="$flashSaleItems" />
         @endif

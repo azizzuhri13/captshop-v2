@@ -82,6 +82,33 @@ class FrontendRenderTest extends TestCase
         $response->assertSee('Mengapa');
     }
 
+    public function test_homepage_renders_apps_premium_slider_when_available(): void
+    {
+        [$category, $product, $item, $banner] = $this->seedFrontendFixture();
+
+        $appsCat = Category::create(['name' => 'Apps Premium', 'slug' => 'apps-premium', 'is_active' => true]);
+        $appProduct = Product::create([
+            'category_id' => $appsCat->id,
+            'name' => 'Netflix Premium',
+            'slug' => 'netflix-premium',
+            'is_active' => true,
+        ]);
+        ProductItem::create([
+            'product_id' => $appProduct->id,
+            'name' => '1 Bulan',
+            'buy_price' => '20000',
+            'sell_price' => '30000',
+            'is_active' => true,
+        ]);
+
+        $response = $this->get('/');
+
+        $response->assertStatus(200);
+        $response->assertSee('Apps Premium');
+        $response->assertSee('Netflix Premium');
+        $response->assertSee('Rp 30.000');
+    }
+
     public function test_category_page_renders_products(): void
     {
         [$category, $product] = $this->seedFrontendFixture();
