@@ -57,16 +57,30 @@
                     Metode: <span class="font-semibold text-slate-200">{{ $transaction->payment_method }} — {{ $transaction->payment_channel }}</span>
                 </p>
 
-                @php($instructions = $transaction->payment_instructions ?? [])
+                @php
+                    $instructions = $transaction->payment_instructions ?? [];
+                @endphp
                 @if ($transaction->payment_gateway === 'belibayar' && !empty($instructions['va_number']))
                     <div class="mt-3 rounded-lg border border-slate-700 bg-slate-900 p-4">
                         <p class="text-xs text-slate-400">{{ in_array($transaction->payment_channel, ['ALFAMART', 'INDOMARET']) ? 'Kode bayar di kasir' : 'Nomor Virtual Account' }}</p>
                         <p class="mt-1 break-all font-mono text-lg font-bold text-white">{{ $instructions['va_number'] }}</p>
                     </div>
                 @elseif ($transaction->payment_gateway === 'belibayar' && !empty($instructions['qr_url']))
+                    @php
+                        $qrSource = $instructions['qr_url'];
+                        $isSandboxDummy = ($qrSource === 'data:image/svg+xml;base64,PHN2Zy8+');
+                        if ($isSandboxDummy) {
+                            $qrSource = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=BELIBAYAR-SANDBOX-' . $transaction->invoice_id;
+                        }
+                    @endphp
                     <div class="mt-3 rounded-lg bg-white p-4 text-center">
-                        <img src="{{ $instructions['qr_url'] }}" alt="QRIS untuk invoice {{ $transaction->invoice_id }}" class="mx-auto h-56 w-56 object-contain">
+                        <img src="{{ $qrSource }}" alt="QRIS untuk invoice {{ $transaction->invoice_id }}" class="mx-auto h-56 w-56 object-contain">
                         <p class="mt-2 text-xs text-slate-700">Pindai QR dengan aplikasi pembayaran Anda</p>
+                        @if ($isSandboxDummy)
+                            <span class="mt-2 inline-block rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                                ⚠️ Mode Sandbox (QR Simulasi Belibayar)
+                            </span>
+                        @endif
                     </div>
                 @elseif ($transaction->payment_gateway === 'belibayar' && $transaction->payment_channel === 'OVO' && $transaction->payment_ref)
                     <p class="mt-3 rounded-lg border border-slate-700 p-3 text-sm text-slate-200">Cek notifikasi pembayaran di aplikasi OVO pada nomor yang Anda masukkan.</p>
