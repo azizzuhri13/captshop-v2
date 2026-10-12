@@ -40,4 +40,19 @@ class BelibayarClientTest extends TestCase
         });
         $this->assertSame('paid', app(BelibayarClient::class)->status('INV-1')['status']);
     }
+
+    public function test_charge_auto_switches_to_live_path_when_live_key_provided(): void
+    {
+        config()->set('payment.belibayar.api_key', 'byr_live_production_key');
+        config()->set('payment.belibayar.secret_key', 'live-secret');
+        config()->set('payment.belibayar.mode', 'sandbox'); // even if env was sandbox
+
+        Http::fake(function ($request) {
+            $this->assertSame('https://api.belibayar.id/direct/v1/payment/charge', $request->url());
+            return Http::response(['success' => true, 'data' => ['reference' => 'QRIS', 'status' => 'pending']], 201);
+        });
+
+        $response = app(BelibayarClient::class)->charge(['reference' => 'QRIS', 'amount' => 15000, 'pay_method' => ['method' => 'qris']]);
+        $this->assertSame('pending', $response['status']);
+    }
 }

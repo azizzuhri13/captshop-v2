@@ -56,7 +56,6 @@ class SettingController extends Controller
         'belibayar_api_key',
         'belibayar_secret_key',
         'belibayar_webhook_secret',
-        'belibayar_merchant_id',
         'digiflazz_api_key',
         'fonnte_token',
     ];

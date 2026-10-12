@@ -9,12 +9,20 @@ class BelibayarClient
 {
     private function settings(): array
     {
-        $mode = config('payment.belibayar.mode');
+        $key = Credentials::get('belibayar_api_key', config('payment.belibayar.api_key'));
+        $secret = Credentials::get('belibayar_secret_key', config('payment.belibayar.secret_key'));
+
+        $mode = Credentials::get('belibayar_mode', config('payment.belibayar.mode', 'sandbox'));
+        if (is_string($key)) {
+            if (str_starts_with($key, 'byr_live_')) {
+                $mode = 'live';
+            } elseif (str_starts_with($key, 'byr_test_')) {
+                $mode = 'sandbox';
+            }
+        }
         if (! in_array($mode, ['sandbox', 'live'], true)) {
             throw PaymentException::notConfigured();
         }
-        $key = Credentials::get('belibayar_api_key', config('payment.belibayar.api_key'));
-        $secret = Credentials::get('belibayar_secret_key', config('payment.belibayar.secret_key'));
         if (! $key || ! $secret || ! str_starts_with($key, $mode === 'sandbox' ? 'byr_test_' : 'byr_live_')) {
             throw PaymentException::notConfigured();
         }
