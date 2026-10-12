@@ -146,7 +146,8 @@ class SettingController extends Controller
 
                 $value = trim((string) ($validated['settings'][$key] ?? ''));
 
-                if ($value !== '') {
+                // Abaikan input kosong atau yang hanya berisi karakter mask pelindung (seperti • atau *)
+                if ($value !== '' && ! preg_match('/^[\x{2022}\*•\s]+$/u', $value)) {
                     SiteSetting::updateOrCreate(['key' => $key], ['value' => $value]);
                     $changes[$key] = '[tersembunyi]';
                 }

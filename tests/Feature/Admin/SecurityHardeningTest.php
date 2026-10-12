@@ -85,6 +85,21 @@ class SecurityHardeningTest extends TestCase
         $this->assertSame('CaptShop Baru', SiteSetting::get('site_name'));
     }
 
+    public function test_settings_secret_not_overwritten_when_filled_with_bullet_mask_characters(): void
+    {
+        SiteSetting::set('belibayar_secret_key', 'REAL-SECRET-12345');
+
+        $this->actingAs($this->superAdmin(), 'admin');
+
+        $this->put(route('admin.settings.update'), [
+            'settings' => [
+                'belibayar_secret_key' => '••••••••••••••••••••••••••••••',
+            ],
+        ]);
+
+        $this->assertSame('REAL-SECRET-12345', SiteSetting::get('belibayar_secret_key'));
+    }
+
     public function test_settings_secret_can_be_cleared(): void
     {
         SiteSetting::set('fonnte_token', 'FONNTE-OLD-TOKEN');

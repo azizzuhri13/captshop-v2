@@ -59,20 +59,30 @@
                     @foreach ($keys as $key)
                         <div>
                             <label class="mb-1.5 block text-sm font-medium text-slate-300">{{ $schema[$key] }}</label>
-                            <input
-                                type="password"
-                                name="settings[{{ $key }}]"
-                                class="input-dark"
-                                autocomplete="new-password"
-                                placeholder="{{ ($settings[$key] ?? '') ? '•••• (tersimpan — biarkan kosong untuk mempertahankan)' : 'Belum diset (pakai .env)' }}"
-                            >
-                            @if (($settings[$key] ?? '') !== '')
-                                <label class="mt-1.5 flex items-center gap-2 text-[11px] text-slate-500">
-                                    <input type="checkbox" name="clear_settings[{{ $key }}]" value="1" class="rounded border-slate-600 bg-slate-800 text-primary focus:ring-primary">
-                                    Hapus nilai tersimpan (kembali ke .env)
-                                </label>
+                            @if (in_array($key, $secretKeys, true))
+                                <input
+                                    type="password"
+                                    name="settings[{{ $key }}]"
+                                    class="input-dark"
+                                    autocomplete="new-password"
+                                    placeholder="{{ ($settings[$key] ?? '') ? 'Tersimpan (kosongkan jika tidak diubah)' : 'Belum diset (pakai .env)' }}"
+                                >
+                                @if (($settings[$key] ?? '') !== '')
+                                    <label class="mt-1.5 flex items-center gap-2 text-[11px] text-slate-500">
+                                        <input type="checkbox" name="clear_settings[{{ $key }}]" value="1" class="rounded border-slate-600 bg-slate-800 text-primary focus:ring-primary">
+                                        Hapus nilai tersimpan (kembali ke .env)
+                                    </label>
+                                @endif
+                                <p class="mt-1 text-[11px] text-slate-600">Kosongkan untuk mempertahankan nilai tersimpan</p>
+                            @else
+                                <input
+                                    type="text"
+                                    name="settings[{{ $key }}]"
+                                    value="{{ old('settings.'.$key, $settings[$key] ?? '') }}"
+                                    class="input-dark"
+                                    autocomplete="off"
+                                >
                             @endif
-                            <p class="mt-1 text-[11px] text-slate-600">Kosongkan untuk memakai nilai dari file .env</p>
                         </div>
                     @endforeach
                 </div>
