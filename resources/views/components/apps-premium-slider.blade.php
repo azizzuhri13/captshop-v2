@@ -17,16 +17,16 @@
             @endif
         </div>
 
-        <div class="scrollbar-none -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 pt-1 snap-x">
+        <div class="scrollbar-none -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 pt-1 snap-x" style="-webkit-overflow-scrolling: touch;">
             @foreach ($products as $product)
                 @php
                     $cheapestItem = $product->items->filter(fn ($item) => $item->is_active ?? true)->sortBy('sell_price')->first();
                     $url = route('product.show', [$product->category->slug, $product->slug]);
                 @endphp
-                <a href="{{ $url }}" class="group w-32 shrink-0 snap-start flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/80 transition hover:border-primary/60 hover:bg-slate-800/90 shadow-sm">
-                    <div class="relative aspect-square w-full overflow-hidden bg-slate-950">
+                <a href="{{ $url }}" class="group shrink-0 snap-start flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/80 transition hover:border-primary/60 hover:bg-slate-800/90 shadow-sm" style="width: 124px; min-width: 124px; max-width: 124px;">
+                    <div class="relative w-full overflow-hidden bg-slate-950" style="height: 105px; min-height: 105px; max-height: 105px;">
                         @if ($product->iconUrl())
-                            <img src="{{ $product->iconUrl() }}" alt="{{ $product->name }}" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" loading="lazy">
+                            <img src="{{ $product->iconUrl() }}" alt="{{ $product->name }}" class="h-full w-full object-cover transition duration-300 group-hover:scale-105" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy">
                         @else
                             <div class="grid h-full w-full place-items-center font-heading text-xl font-bold text-slate-600">
                                 {{ strtoupper(substr($product->name, 0, 2)) }}
@@ -39,7 +39,7 @@
                     </div>
 
                     <div class="flex flex-1 flex-col justify-between p-2.5">
-                        <p class="line-clamp-1 text-xs font-semibold text-slate-100 group-hover:text-primary-light transition">{{ $product->name }}</p>
+                        <p class="truncate text-xs font-semibold text-slate-100 group-hover:text-primary-light transition" title="{{ $product->name }}">{{ $product->name }}</p>
                         @if ($cheapestItem)
                             <div class="mt-1">
                                 <p class="text-[10px] text-slate-500">Mulai dari</p>
