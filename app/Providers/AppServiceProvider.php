@@ -6,7 +6,9 @@ use App\Models\Admin;
 use App\Services\Payment\PaymentGatewayInterface;
 use App\Services\Payment\BelibayarService;
 use App\Services\Supplier\DigiflazzService;
+use App\Services\Supplier\TokovoucherService;
 use App\Services\Supplier\SupplierInterface;
+use App\Support\Credentials;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -45,8 +47,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(PaymentGatewayInterface::class, BelibayarService::class);
 
         $this->app->bind(SupplierInterface::class, function ($app) {
-            return match (config('supplier.default')) {
-                'digiflazz' => $app->make(DigiflazzService::class),
+            $default = Credentials::get('supplier_default', config('supplier.default', 'digiflazz'));
+
+            return match (strtolower((string) $default)) {
+                'tokovoucher', 'apigames' => $app->make(TokovoucherService::class),
                 default => $app->make(DigiflazzService::class),
             };
         });

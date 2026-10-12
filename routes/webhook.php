@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Webhook\BelibayarController;
+use App\Http\Controllers\Webhook\TokovoucherController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -15,4 +16,5 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('webhook')->group(function () {
     Route::post('/belibayar', [BelibayarController::class, 'handle'])->middleware('throttle:60,1');
+    Route::post('/tokovoucher', [TokovoucherController::class, 'handle'])->middleware('throttle:60,1');
 });

@@ -38,9 +38,16 @@ class SettingController extends Controller
         'belibayar_merchant_id' => 'Belibayar Merchant ID',
 
         // Integrasi — Supplier (DigiFlazz)
+        'supplier_default' => 'Supplier Default (digiflazz / tokovoucher)',
         'digiflazz_username' => 'DigiFlazz Username',
         'digiflazz_api_key' => 'DigiFlazz API Key',
         'digiflazz_base_url' => 'DigiFlazz Base URL',
+
+        // Integrasi — Supplier (Tokovoucher / Apigames)
+        'tokovoucher_member_code' => 'Tokovoucher Member Code',
+        'tokovoucher_secret_key' => 'Tokovoucher Secret Key',
+        'tokovoucher_signature' => 'Tokovoucher Signature Default (Opsional)',
+        'tokovoucher_base_url' => 'Tokovoucher Base URL',
 
         // Integrasi — WhatsApp Gateway (Fonnte)
         'fonnte_token' => 'Fonnte Token',
@@ -57,6 +64,8 @@ class SettingController extends Controller
         'belibayar_secret_key',
         'belibayar_webhook_secret',
         'digiflazz_api_key',
+        'tokovoucher_secret_key',
+        'tokovoucher_signature',
         'fonnte_token',
     ];
 

@@ -6,6 +6,7 @@ use App\Models\Transaction;
 use App\Services\Notification\NotificationService;
 use App\Services\Supplier\SupplierException;
 use App\Services\Supplier\SupplierInterface;
+use App\Services\Supplier\TokovoucherService;
 use Illuminate\Support\Facades\Log;
 
 class FulfillmentService
@@ -33,7 +34,8 @@ class FulfillmentService
         $transaction->forceFill(['status' => 'processing', 'processed_at' => now()])->save();
 
         try {
-            $result = $this->supplier->topup($transaction, $transaction->customer_data ?? []);
+            $supplier = $this->resolveSupplier($transaction);
+            $result = $supplier->topup($transaction, $transaction->customer_data ?? []);
 
             $status = $result['status'] === 'completed' ? 'completed' : 'processing';
 
@@ -58,6 +60,23 @@ class FulfillmentService
         }
 
         return $transaction;
+    }
+
+    /**
+     * Tentukan supplier yang digunakan untuk transaksi ini.
+     * Mengutamakan supplier_type pada produk jika didefinisikan.
+     */
+    protected function resolveSupplier(Transaction $transaction): SupplierInterface
+    {
+        $type = strtolower((string) ($transaction->productItem?->product?->supplier_type ?? ''));
+
+        if (in_array($type, ['tokovoucher', 'apigames'], true)) {
+            return $this->supplier instanceof TokovoucherService
+                ? $this->supplier
+                : app(TokovoucherService::class);
+        }
+
+        return $this->supplier;
     }
 
     /**

@@ -23,4 +23,11 @@ return [
         'testing' => env('DIGIFLAZZ_TESTING', false),
     ],
 
+    'tokovoucher' => [
+        'member_code' => env('TOKOVOUCHER_MEMBER_CODE'),
+        'secret_key' => env('TOKOVOUCHER_SECRET_KEY'),
+        'signature' => env('TOKOVOUCHER_SIGNATURE'),
+        'base_url' => env('TOKOVOUCHER_BASE_URL', 'https://api.tokovoucher.net'),
+    ],
+
 ];

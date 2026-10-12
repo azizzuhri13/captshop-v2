@@ -80,8 +80,8 @@
         <div>
             <label class="mb-1.5 block text-sm font-medium text-slate-300">Tipe Supplier</label>
             <select name="supplier_type" class="input-dark">
-                <option value="">— Tanpa supplier —</option>
-                @foreach (['digiflazz', 'apigames', 'vocagame', 'manual'] as $type)
+                <option value="">— Ikuti Default —</option>
+                @foreach (['digiflazz', 'tokovoucher', 'apigames', 'vocagame', 'manual'] as $type)
                     <option value="{{ $type }}" @selected(old('supplier_type', $product?->supplier_type) === $type)>{{ ucfirst($type) }}</option>
                 @endforeach
             </select>

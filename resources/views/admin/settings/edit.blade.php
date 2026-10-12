@@ -49,7 +49,9 @@
 
         @foreach ([
             'Payment Gateway (Belibayar)' => ['belibayar_api_key', 'belibayar_secret_key', 'belibayar_webhook_secret', 'belibayar_merchant_id'],
+            '🔌 Supplier Utama (Default)' => ['supplier_default'],
             '🔌 Supplier (DigiFlazz)' => ['digiflazz_username', 'digiflazz_api_key', 'digiflazz_base_url'],
+            '🔌 Supplier (Tokovoucher / Apigames)' => ['tokovoucher_member_code', 'tokovoucher_secret_key', 'tokovoucher_signature', 'tokovoucher_base_url'],
             '💬 WhatsApp Gateway (Fonnte)' => ['fonnte_token', 'fonnte_base_url'],
         ] as $sectionTitle => $keys)
             <section class="rounded-xl border border-primary/30 bg-primary/5 p-5">
