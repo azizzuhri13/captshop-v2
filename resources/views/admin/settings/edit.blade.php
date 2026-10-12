@@ -60,26 +60,45 @@
                         <div>
                             <label class="mb-1.5 block text-sm font-medium text-slate-300">{{ $schema[$key] }}</label>
                             @if (in_array($key, $secretKeys, true))
-                                <input
-                                    type="password"
-                                    name="settings[{{ $key }}]"
-                                    class="input-dark"
-                                    autocomplete="new-password"
-                                    placeholder="{{ ($settings[$key] ?? '') ? 'Tersimpan (kosongkan jika tidak diubah)' : 'Belum diset (pakai .env)' }}"
-                                >
-                                @if (($settings[$key] ?? '') !== '')
-                                    <label class="mt-1.5 flex items-center gap-2 text-[11px] text-slate-500">
-                                        <input type="checkbox" name="clear_settings[{{ $key }}]" value="1" class="rounded border-slate-600 bg-slate-800 text-primary focus:ring-primary">
-                                        Hapus nilai tersimpan (kembali ke .env)
-                                    </label>
-                                @endif
-                                <p class="mt-1 text-[11px] text-slate-600">Kosongkan untuk mempertahankan nilai tersimpan</p>
+                                <div x-data="{ show: false }" class="space-y-1">
+                                    <div class="relative">
+                                        <input
+                                            :type="show ? 'text' : 'password'"
+                                            name="settings[{{ $key }}]"
+                                            class="input-dark pr-10 font-mono text-xs"
+                                            autocomplete="off"
+                                            placeholder="{{ !empty($settings[$key]) ? 'Tersimpan (panjang ' . strlen($settings[$key]) . ' kar, akhiran ...' . substr($settings[$key], -4) . ')' : 'Masukkan ' . $schema[$key] }}"
+                                        >
+                                        <button
+                                            type="button"
+                                            @click="show = !show"
+                                            class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-200"
+                                            tabindex="-1"
+                                            title="Lihat / Sembunyikan"
+                                        >
+                                            <span x-show="!show" class="text-xs">👁️</span>
+                                            <span x-show="show" class="text-xs" x-cloak>🙈</span>
+                                        </button>
+                                    </div>
+                                    @if (!empty($settings[$key]))
+                                        <div class="flex items-center justify-between text-[11px] text-slate-400">
+                                            <span>Tersimpan: <span class="font-mono text-emerald-400">...{{ substr($settings[$key], -4) }}</span> ({{ strlen($settings[$key]) }} kar)</span>
+                                            <label class="flex items-center gap-1.5 text-slate-500 hover:text-red-400 cursor-pointer">
+                                                <input type="checkbox" name="clear_settings[{{ $key }}]" value="1" class="rounded border-slate-600 bg-slate-800 text-primary">
+                                                Hapus
+                                            </label>
+                                        </div>
+                                    @else
+                                        <p class="text-[11px] text-amber-400/90">⚠️ Belum ada nilai tersimpan di database</p>
+                                    @endif
+                                    <p class="text-[11px] text-slate-500">Kosongkan jika tidak ingin mengubah nilai yang sudah tersimpan</p>
+                                </div>
                             @else
                                 <input
                                     type="text"
                                     name="settings[{{ $key }}]"
                                     value="{{ old('settings.'.$key, $settings[$key] ?? '') }}"
-                                    class="input-dark"
+                                    class="input-dark font-mono text-xs"
                                     autocomplete="off"
                                 >
                             @endif

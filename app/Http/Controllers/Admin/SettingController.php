@@ -144,6 +144,7 @@ class SettingController extends Controller
                 }
 
                 $value = trim((string) ($validated['settings'][$key] ?? ''));
+                $value = str_replace(["\r", "\n"], '', $value);
 
                 // Abaikan input kosong atau yang hanya berisi karakter mask pelindung (seperti • atau *)
                 if ($value !== '' && ! preg_match('/^[\x{2022}\*•\s]+$/u', $value)) {
