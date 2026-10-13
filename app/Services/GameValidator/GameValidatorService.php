@@ -45,16 +45,24 @@ class GameValidatorService implements GameValidatorInterface
 
         $cacheKey = "game_nick:{$targetGame}:{$userId}:".($zoneId ?? '-');
 
-        return Cache::remember($cacheKey, now()->addHour(), function () use ($targetGame, $userId, $zoneId) {
-            return $this->queryPrimary($targetGame, $userId, $zoneId)
-                ?? $this->queryFallback($targetGame, $userId, $zoneId)
-                ?? [
-                    'valid' => false,
-                    'nickname' => null,
-                    'message' => 'User ID tidak ditemukan atau Server/Zone ID salah.',
-                    'source' => 'not_found',
-                ];
-        });
+        if (Cache::has($cacheKey)) {
+            return Cache::get($cacheKey);
+        }
+
+        $result = $this->queryPrimary($targetGame, $userId, $zoneId)
+            ?? $this->queryFallback($targetGame, $userId, $zoneId)
+            ?? [
+                'valid' => false,
+                'nickname' => null,
+                'message' => 'User ID tidak ditemukan. Periksa kembali akun Anda.',
+                'source' => 'not_found',
+            ];
+
+        if (! empty($result['valid'])) {
+            Cache::put($cacheKey, $result, now()->addHour());
+        }
+
+        return $result;
     }
 
     /**
@@ -90,10 +98,14 @@ class GameValidatorService implements GameValidatorInterface
             }
 
             if ($response->status() === 404) {
+                $msg = ($targetGame === 'FREEFIRE')
+                    ? 'User ID tidak ditemukan. Periksa kembali ID Anda.'
+                    : 'User ID atau Zone ID tidak ditemukan. Periksa kembali akun Anda.';
+
                 return [
                     'valid' => false,
                     'nickname' => null,
-                    'message' => 'Akun tidak ditemukan. Periksa User ID & Zone ID.',
+                    'message' => $msg,
                     'source' => 'primary',
                 ];
             }

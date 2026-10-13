@@ -63,6 +63,8 @@ Alpine.data('orderForm', (config) => ({
     nicknameError: '',
     nicknameValidated: false,
     _debounceTimer: null,
+    _checkSeq: 0,
+    _abortController: null,
 
     init() {
         // Saat nominal diganti, kupon harus divalidasi ulang (diskon dan
@@ -79,28 +81,41 @@ Alpine.data('orderForm', (config) => ({
                 clearTimeout(this._debounceTimer);
                 this._debounceTimer = setTimeout(() => {
                     this.validateNickname();
-                }, 400);
+                }, 600);
             }, { deep: true });
         }
     },
 
     async validateNickname() {
-        const userId = (this.customerData['user_id'] || '').trim();
-        const zoneId = (this.customerData['zone_id'] || '').trim();
+        let userId = (this.customerData['user_id'] || '').replace(/\s+/g, '');
+        let zoneId = (this.customerData['zone_id'] || '').replace(/\s+/g, '');
 
-        if (! userId) {
+        // Minimal panjang karakter sebelum cek (cegah spam saat baru ngetik 1-2 digit)
+        const isFF = this.gameSlug.includes('free-fire') || this.gameSlug.includes('freefire');
+        const isML = this.gameSlug.includes('mobile-legend') || this.gameSlug.includes('mlbb');
+
+        if (! userId || (isFF && userId.length < 8) || (isML && userId.length < 6)) {
             this.nickname = null;
             this.nicknameError = '';
             this.nicknameValidated = false;
+            this.nicknameChecking = false;
             return;
         }
 
-        if (this.gameSlug.includes('mobile-legend') && ! zoneId) {
+        if (isML && (! zoneId || zoneId.length < 3)) {
             this.nickname = null;
             this.nicknameError = '';
             this.nicknameValidated = false;
+            this.nicknameChecking = false;
             return;
         }
+
+        // Batalkan request sebelumnya yang masih berjalan agar tidak balapan
+        if (this._abortController) {
+            this._abortController.abort();
+        }
+        this._abortController = new AbortController();
+        const currentSeq = ++this._checkSeq;
 
         this.nicknameChecking = true;
         this.nicknameError = '';
@@ -119,9 +134,19 @@ Alpine.data('orderForm', (config) => ({
                     user_id: userId,
                     zone_id: zoneId || null,
                 }),
+                signal: this._abortController.signal,
             });
 
+            // Abaikan jika ada request baru yang dikirim setelah request ini
+            if (currentSeq !== this._checkSeq) {
+                return;
+            }
+
             const data = await response.json();
+
+            if (currentSeq !== this._checkSeq) {
+                return;
+            }
 
             if (data.valid && data.nickname) {
                 this.nickname = data.nickname;
@@ -129,15 +154,22 @@ Alpine.data('orderForm', (config) => ({
                 this.nicknameValidated = true;
             } else {
                 this.nickname = null;
-                this.nicknameError = data.message || 'ID tidak ditemukan. Periksa kembali User ID & Zone ID.';
+                this.nicknameError = data.message || 'ID tidak ditemukan. Periksa kembali User ID Anda.';
                 this.nicknameValidated = false;
             }
-        } catch {
-            this.nickname = null;
-            this.nicknameError = 'Gagal memverifikasi ID. Silakan coba lagi.';
-            this.nicknameValidated = false;
+        } catch (e) {
+            if (e && e.name === 'AbortError') {
+                return;
+            }
+            if (currentSeq === this._checkSeq) {
+                this.nickname = null;
+                this.nicknameError = 'Gagal memverifikasi ID. Silakan coba lagi.';
+                this.nicknameValidated = false;
+            }
         } finally {
-            this.nicknameChecking = false;
+            if (currentSeq === this._checkSeq) {
+                this.nicknameChecking = false;
+            }
         }
     },
 
