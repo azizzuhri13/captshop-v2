@@ -8,6 +8,8 @@ use App\Services\Payment\BelibayarService;
 use App\Services\Supplier\DigiflazzService;
 use App\Services\Supplier\TokovoucherService;
 use App\Services\Supplier\SupplierInterface;
+use App\Services\GameValidator\GameValidatorInterface;
+use App\Services\GameValidator\GameValidatorService;
 use App\Support\Credentials;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -45,6 +47,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(PaymentGatewayInterface::class, BelibayarService::class);
+        $this->app->bind(GameValidatorInterface::class, GameValidatorService::class);
 
         $this->app->bind(SupplierInterface::class, function ($app) {
             $default = Credentials::get('supplier_default', config('supplier.default', 'digiflazz'));

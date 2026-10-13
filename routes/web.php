@@ -32,6 +32,10 @@ Route::post('/coupon/check', [CouponController::class, 'check'])
     ->middleware('throttle:20,1')
     ->name('coupon.check');
 
+Route::post('/game/check-nickname', [\App\Http\Controllers\Frontend\GameValidatorController::class, 'check'])
+    ->middleware('throttle:60,1')
+    ->name('game.check-nickname');
+
 Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap');
 
 Route::get('/invoice/{invoiceId}', [InvoiceController::class, 'show'])

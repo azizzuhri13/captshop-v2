@@ -54,6 +54,16 @@ Alpine.data('orderForm', (config) => ({
     couponError: '',
     processing: false,
 
+    // Game validation state
+    gameSlug: config.gameSlug || '',
+    checkNicknameUrl: config.checkNicknameUrl || '',
+    isGameAccount: Boolean(config.isGameAccount),
+    nickname: null,
+    nicknameChecking: false,
+    nicknameError: '',
+    nicknameValidated: false,
+    _debounceTimer: null,
+
     init() {
         // Saat nominal diganti, kupon harus divalidasi ulang (diskon dan
         // syarat min purchase bisa berubah mengikuti harga item).
@@ -62,6 +72,73 @@ Alpine.data('orderForm', (config) => ({
                 this.applyCoupon();
             }
         });
+
+        // Watch customerData untuk cek nickname otomatis
+        if (this.isGameAccount) {
+            this.$watch('customerData', () => {
+                clearTimeout(this._debounceTimer);
+                this._debounceTimer = setTimeout(() => {
+                    this.validateNickname();
+                }, 400);
+            }, { deep: true });
+        }
+    },
+
+    async validateNickname() {
+        const userId = (this.customerData['user_id'] || '').trim();
+        const zoneId = (this.customerData['zone_id'] || '').trim();
+
+        if (! userId) {
+            this.nickname = null;
+            this.nicknameError = '';
+            this.nicknameValidated = false;
+            return;
+        }
+
+        if (this.gameSlug.includes('mobile-legend') && ! zoneId) {
+            this.nickname = null;
+            this.nicknameError = '';
+            this.nicknameValidated = false;
+            return;
+        }
+
+        this.nicknameChecking = true;
+        this.nicknameError = '';
+
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+            const response = await fetch(this.checkNicknameUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify({
+                    game_code: this.gameSlug,
+                    user_id: userId,
+                    zone_id: zoneId || null,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (data.valid && data.nickname) {
+                this.nickname = data.nickname;
+                this.nicknameError = '';
+                this.nicknameValidated = true;
+            } else {
+                this.nickname = null;
+                this.nicknameError = data.message || 'ID tidak ditemukan. Periksa kembali User ID & Zone ID.';
+                this.nicknameValidated = false;
+            }
+        } catch {
+            this.nickname = null;
+            this.nicknameError = 'Gagal memverifikasi ID. Silakan coba lagi.';
+            this.nicknameValidated = false;
+        } finally {
+            this.nicknameChecking = false;
+        }
     },
 
     get selectedItem() {
@@ -128,6 +205,10 @@ Alpine.data('orderForm', (config) => ({
     },
 
     get canSubmit() {
+        if (this.isGameAccount && ! this.nicknameValidated) {
+            return false;
+        }
+
         return Boolean(this.itemId && this.paymentChannel && this.form.customer_phone);
     },
 

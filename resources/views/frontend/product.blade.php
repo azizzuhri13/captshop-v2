@@ -87,6 +87,9 @@
             items: {{ Js::from($alpineItems) }},
             channels: {{ Js::from($alpineChannels) }},
             couponCheckUrl: '{{ route('coupon.check') }}',
+            gameSlug: '{{ $product->slug }}',
+            checkNicknameUrl: '{{ route('game.check-nickname') }}',
+            isGameAccount: {{ in_array($product->slug, ['free-fire', 'freefire', 'mobile-legends', 'mobile-legend', 'mlbb']) ? 'true' : 'false' }},
         })"
          class="space-y-6"
     >
@@ -143,6 +146,32 @@
                         </div>
                     </template>
                 </div>
+
+                {{-- Status Verifikasi Nickname Game --}}
+                <template x-if="isGameAccount">
+                    <div class="mt-3">
+                        <div x-show="nicknameChecking" x-cloak class="flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-300">
+                            <svg class="h-4 w-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                            <span>Memeriksa User ID ke server game...</span>
+                        </div>
+
+                        <div x-show="nickname && !nicknameChecking" x-cloak class="flex items-center justify-between rounded-xl border border-emerald-500/40 bg-emerald-500/15 p-3 text-xs text-emerald-300">
+                            <div class="flex items-center gap-2">
+                                <span class="grid h-5 w-5 place-items-center rounded-full bg-emerald-500/30 text-emerald-200">✓</span>
+                                <div>
+                                    <span class="text-slate-400">Nickname:</span>
+                                    <strong class="ml-1 text-sm font-bold text-emerald-200" x-text="nickname"></strong>
+                                </div>
+                            </div>
+                            <span class="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Akun Ditemukan</span>
+                        </div>
+
+                        <div x-show="nicknameError && !nicknameChecking" x-cloak class="flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/15 p-3 text-xs text-red-300">
+                            <span class="grid h-5 w-5 place-items-center rounded-full bg-red-500/30 text-red-200">✕</span>
+                            <span x-text="nicknameError"></span>
+                        </div>
+                    </div>
+                </template>
 
                 @if ($product->instruction)
                     <details class="mt-3 text-sm text-slate-400">
