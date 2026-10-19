@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Sedang Pemeliharaan — {{ \App\Models\SiteSetting::get('site_name') ?? 'CaptShop' }}</title>
+    <title>Sedang Pemeliharaan — {{ \App\Models\SiteSetting::get('site_name') ?? 'CAPTSHOP' }}</title>
     <style>
         body {
             margin: 0;

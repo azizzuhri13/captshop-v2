@@ -11,8 +11,12 @@ class DashboardController extends Controller
     /**
      * Ringkasan statistik bisnis untuk dashboard admin.
      */
-    public function index(): View
+    public function index()
     {
+        if (auth('admin')->user()?->role === 'writer') {
+            return redirect()->route('admin.articles.index');
+        }
+
         $today = Transaction::query()
             ->whereDate('created_at', today())
             ->selectRaw("

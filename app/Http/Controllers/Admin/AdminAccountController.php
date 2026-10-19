@@ -43,6 +43,12 @@ class AdminAccountController extends Controller
     {
         $validated = $this->validated($request, $account->id);
 
+        if ($account->isSuperAdmin() && (! $validated['is_active'] || $validated['role'] !== 'super_admin')) {
+            if (Admin::query()->where('role', 'super_admin')->where('is_active', true)->whereKeyNot($account->id)->doesntExist()) {
+                return back()->with('error', 'Minimal harus ada satu akun super admin yang aktif.');
+            }
+        }
+
         // Password kosong = tidak diganti.
         if (empty($validated['password'])) {
             unset($validated['password']);
@@ -82,7 +88,7 @@ class AdminAccountController extends Controller
             'name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'email', 'max:150', 'unique:admins,email'.($ignoreId ? ','.$ignoreId : '')],
             'password' => [$ignoreId ? 'nullable' : 'required', 'string', 'min:8'],
-            'role' => ['required', 'in:super_admin,admin,operator,cs'],
+            'role' => ['required', 'in:super_admin,admin,operator,cs,writer'],
             'is_active' => ['boolean'],
         ];
 

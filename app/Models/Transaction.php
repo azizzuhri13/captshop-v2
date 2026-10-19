@@ -25,6 +25,8 @@ class Transaction extends Model
         'coupon_discount',
         'payment_method',
         'payment_channel',
+        'payment_gateway',
+        'payment_instructions',
         'payment_ref',
         'payment_url',
         'status',
@@ -41,6 +43,7 @@ class Transaction extends Model
     {
         return [
             'customer_data' => 'array',
+            'payment_instructions' => 'array',
             'amount' => 'decimal:2',
             'fee' => 'decimal:2',
             'total' => 'decimal:2',
@@ -56,6 +59,21 @@ class Transaction extends Model
     public function productItem(): BelongsTo
     {
         return $this->belongsTo(ProductItem::class);
+    }
+
+    public function netflixAccount(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(NetflixAccount::class);
+    }
+
+    public function disneyAccount(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(DisneyAccount::class);
+    }
+
+    public function canvaAccount(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(CanvaAccount::class);
     }
 
     public function product(): HasOneThrough

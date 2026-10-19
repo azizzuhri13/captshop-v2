@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Syarat & Ketentuan — '.($siteName ?? 'CaptShop'))
+@section('title', 'Syarat & Ketentuan — '.($siteName ?? 'CAPTSHOP'))
 
 @section('content')
     <div class="mx-auto max-w-xl space-y-4">
@@ -12,7 +12,7 @@
         <div class="space-y-4 rounded-2xl border border-slate-800 bg-slate-800/40 p-5 text-sm leading-relaxed text-slate-400">
             <section>
                 <h2 class="font-semibold text-slate-200">1. Ketentuan Umum</h2>
-                <p class="mt-1">Dengan menggunakan layanan {{ $siteName ?? 'CaptShop' }}, Anda menyetujui seluruh syarat dan ketentuan yang berlaku. Kami dapat memperbarui ketentuan ini sewaktu-waktu.</p>
+                <p class="mt-1">Dengan menggunakan layanan {{ $siteName ?? 'CAPTSHOP' }}, Anda menyetujui seluruh syarat dan ketentuan yang berlaku. Kami dapat memperbarui ketentuan ini sewaktu-waktu.</p>
             </section>
 
             <section>

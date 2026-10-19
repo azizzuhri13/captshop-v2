@@ -6,6 +6,7 @@
 <form
     action="{{ $category ? route('admin.categories.update', $category) : route('admin.categories.store') }}"
     method="POST"
+    enctype="multipart/form-data"
     class="space-y-4"
 >
     @csrf
@@ -35,11 +36,6 @@
         </div>
 
         <div>
-            <label class="mb-1.5 block text-sm font-medium text-slate-300">Ikon (emoji atau URL gambar)</label>
-            <input type="text" name="icon" value="{{ old('icon', $category?->icon) }}" class="input-dark" placeholder="🎮">
-        </div>
-
-        <div>
             <label class="mb-1.5 block text-sm font-medium text-slate-300">Banner (URL)</label>
             <input type="text" name="banner" value="{{ old('banner', $category?->banner) }}" class="input-dark" placeholder="https://...">
         </div>
@@ -62,6 +58,7 @@
 
     @error('name')<p class="text-xs text-red-400">{{ $message }}</p>@enderror
     @error('slug')<p class="text-xs text-red-400">{{ $message }}</p>@enderror
+    @error('icon')<p class="text-xs text-red-400">{{ $message }}</p>@enderror
 
     <div class="flex gap-2 pt-2">
         <button type="submit" class="btn-primary">{{ $category ? 'Simpan Perubahan' : 'Buat Kategori' }}</button>

@@ -4,10 +4,17 @@ namespace App\Providers;
 
 use App\Models\Admin;
 use App\Services\Payment\PaymentGatewayInterface;
-use App\Services\Payment\TripayService;
+use App\Services\Payment\BelibayarService;
 use App\Services\Supplier\DigiflazzService;
+use App\Services\Supplier\TokovoucherService;
 use App\Services\Supplier\SupplierInterface;
+use App\Services\GameValidator\GameValidatorInterface;
+use App\Services\GameValidator\GameValidatorService;
+use App\Support\Credentials;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -23,14 +30,17 @@ class AppServiceProvider extends ServiceProvider
         'admin' => [
             'categories.manage', 'products.manage', 'product-items.manage',
             'banners.manage', 'coupons.manage', 'payment-channels.manage',
-            'transactions.view',
+            'articles.manage', 'transactions.view',
         ],
         'operator' => [
             'products.manage', 'product-items.manage', 'coupons.manage',
-            'transactions.view',
+            'articles.manage', 'transactions.view',
         ],
         'cs' => [
             'transactions.view',
+        ],
+        'writer' => [
+            'articles.manage',
         ],
     ];
 
@@ -39,16 +49,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(PaymentGatewayInterface::class, function ($app) {
-            return match (config('payment.default')) {
-                'tripay' => $app->make(TripayService::class),
-                default => $app->make(TripayService::class),
-            };
-        });
+        $this->app->bind(PaymentGatewayInterface::class, BelibayarService::class);
+        $this->app->bind(GameValidatorInterface::class, GameValidatorService::class);
 
         $this->app->bind(SupplierInterface::class, function ($app) {
-            return match (config('supplier.default')) {
-                'digiflazz' => $app->make(DigiflazzService::class),
+            $default = Credentials::get('supplier_default', config('supplier.default', 'digiflazz'));
+
+            return match (strtolower((string) $default)) {
+                'tokovoucher', 'apigames' => $app->make(TokovoucherService::class),
                 default => $app->make(DigiflazzService::class),
             };
         });
@@ -59,6 +67,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if ($this->app->environment('production', 'staging') || in_array(env('APP_ENV'), ['production', 'staging'], true)) {
+            \Illuminate\Support\Facades\URL::forceScheme('https');
+        }
+
         Gate::before(fn (Admin $admin) => $admin->isSuperAdmin() ? true : null);
 
         $abilities = [];
@@ -72,5 +84,9 @@ class AppServiceProvider extends ServiceProvider
         foreach ($abilities as $ability => $roles) {
             Gate::define($ability, fn (Admin $admin) => in_array($admin->role, $roles, true));
         }
+
+        RateLimiter::for('orders', function (Request $request) {
+            return Limit::perMinute(10)->by($request->ip());
+        });
     }
 }

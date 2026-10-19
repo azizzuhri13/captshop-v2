@@ -4,13 +4,15 @@ namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
-use App\Services\Payment\PaymentGatewayInterface;
+use App\Services\Payment\BelibayarService;
+use App\Services\FulfillmentService;
 use Illuminate\View\View;
 
 class InvoiceController extends Controller
 {
     public function __construct(
-        protected PaymentGatewayInterface $gateway,
+        protected BelibayarService $belibayar,
+        protected FulfillmentService $fulfillment,
     ) {}
 
     /**
@@ -24,6 +26,10 @@ class InvoiceController extends Controller
             ->with(['productItem.product.category'])
             ->firstOrFail();
 
+        if ($transaction->status === 'pending' && $transaction->expired_at && $transaction->expired_at->isPast()) {
+            $transaction->forceFill(['status' => 'expired'])->save();
+        }
+
         return view('frontend.invoice', compact('transaction'));
     }
 
@@ -36,20 +42,40 @@ class InvoiceController extends Controller
             ->where('invoice_id', $invoiceId)
             ->firstOrFail();
 
-        if ($transaction->status === 'pending' && $transaction->payment_ref) {
+        if (in_array($transaction->status, ['pending', 'expired'], true)
+            && $transaction->payment_gateway === 'belibayar' && $transaction->payment_ref) {
             try {
-                $detail = $this->gateway->getTransactionDetail($transaction->payment_ref);
-
-                $status = $this->gateway->mapStatus((string) ($detail['status'] ?? ''));
-
-                if ($status !== 'pending' && $transaction->status === 'pending') {
-                    $transaction->forceFill([
-                        'status' => $status,
-                        'paid_at' => $status === 'paid' ? now() : $transaction->paid_at,
-                    ])->save();
+                $detail = $this->belibayar->getTransactionDetail($transaction->invoice_id);
+                if (($detail['transaction_id'] ?? null) !== $transaction->payment_ref
+                    || ($detail['reference'] ?? null) !== $transaction->invoice_id
+                    || ($detail['payment_channel'] ?? null) !== $transaction->payment_channel
+                    || ! is_int($detail['amount'] ?? null)
+                    || $detail['amount'] !== (int) $transaction->total) {
+                    throw new \RuntimeException('Status pembayaran tidak cocok.');
+                }
+                $status = $this->belibayar->mapStatus((string) ($detail['status'] ?? ''));
+                if ($status === 'paid' && in_array($transaction->status, ['pending', 'expired'], true)) {
+                    $claimed = \Illuminate\Support\Facades\DB::transaction(function () use ($transaction) {
+                        $locked = Transaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+                        if (! in_array($locked->status, ['pending', 'expired'], true)) {
+                            return false;
+                        }
+                        $locked->forceFill(['status' => 'paid', 'paid_at' => now()])->save();
+                        return true;
+                    });
+                    if ($claimed) {
+                        $this->fulfillment->fulfill($transaction->fresh());
+                    }
+                } elseif ($status === 'expired' && $transaction->status === 'pending') {
+                    \Illuminate\Support\Facades\DB::transaction(function () use ($transaction) {
+                        $locked = Transaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+                        if ($locked->status === 'pending') {
+                            $locked->forceFill(['status' => 'expired'])->save();
+                        }
+                    });
                 }
             } catch (\Throwable $e) {
-                // Gateway tidak merespons: biarkan status pending, user bisa coba lagi.
+                // Kegagalan gateway atau mismatch tidak boleh mengubah status pesanan.
             }
         }
 

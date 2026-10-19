@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Coupon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class CouponController extends Controller
 {
@@ -26,6 +27,8 @@ class CouponController extends Controller
         $coupon = Coupon::query()->where('code', $code)->first();
 
         if ($coupon === null || ($error = $coupon->validationError($amount)) !== null) {
+            Log::warning("Percobaan kupon gagal dari IP {$request->ip()}: {$code}");
+
             return response()->json([
                 'valid' => false,
                 'message' => $error ?? 'Kode kupon tidak ditemukan.',

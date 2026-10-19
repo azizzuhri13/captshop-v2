@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Kebijakan Privasi — '.($siteName ?? 'CaptShop'))
+@section('title', 'Kebijakan Privasi — '.($siteName ?? 'CAPTSHOP'))
 
 @section('content')
     <div class="mx-auto max-w-xl space-y-4">
@@ -21,7 +21,12 @@
 
             <section>
                 <h2 class="font-semibold text-slate-200">Penggunaan Data</h2>
-                <p class="mt-1">Data hanya digunakan untuk memproses dan memvalidasi pesanan Anda, mengirim notifikasi status, serta keperluan audit keamanan. Kami tidak menjual atau membagikan data Anda kepada pihak ketiga di luar partner pemrosesan (payment gateway & supplier resmi).</p>
+                <p class="mt-1">Data hanya digunakan untuk memproses dan memvalidasi pesanan Anda, mengirim notifikasi status, serta keperluan audit keamanan. Kami tidak menjual atau membagikan data Anda kepada pihak ketiga di luar partner pemrosesan (payment gateway &amp; supplier resmi).</p>
+            </section>
+
+            <section>
+                <h2 class="font-semibold text-slate-200">Penggunaan Data Akun Google (Google OAuth)</h2>
+                <p class="mt-1">Ketika Anda masuk menggunakan layanan Google Sign-In, kami hanya mengakses data profil dasar Anda (nama, alamat email, dan foto profil publik) semata-mata untuk autentikasi dan pembuatan akun di platform {{ $siteName ?? 'CAPTSHOP' }}. Kami tidak mengakses, meminta, atau menyimpan kata sandi akun Google Anda, dan kami tidak membagikan data tersebut kepada pihak lain.</p>
             </section>
 
             <section>

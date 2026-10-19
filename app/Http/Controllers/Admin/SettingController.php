@@ -31,14 +31,23 @@ class SettingController extends Controller
         // Maintenance
         'maintenance_mode' => 'Maintenance Mode (true/false)',
 
-        // Integrasi — Payment Gateway (Tripay)
-        'tripay_api_key' => 'Tripay API Key',
-        'tripay_base_url' => 'Tripay Base URL',
+        // Integrasi — Belibayar (secret tersimpan terpisah dari tampilan)
+        'belibayar_api_key' => 'Belibayar API Key',
+        'belibayar_secret_key' => 'Belibayar Secret Key',
+        'belibayar_webhook_secret' => 'Belibayar Webhook Secret',
+        'belibayar_merchant_id' => 'Belibayar Merchant ID',
 
         // Integrasi — Supplier (DigiFlazz)
+        'supplier_default' => 'Supplier Default (digiflazz / tokovoucher)',
         'digiflazz_username' => 'DigiFlazz Username',
         'digiflazz_api_key' => 'DigiFlazz API Key',
         'digiflazz_base_url' => 'DigiFlazz Base URL',
+
+        // Integrasi — Supplier (Tokovoucher / Apigames)
+        'tokovoucher_member_code' => 'Tokovoucher Member Code',
+        'tokovoucher_secret_key' => 'Tokovoucher Secret Key',
+        'tokovoucher_signature' => 'Tokovoucher Signature Default (Opsional)',
+        'tokovoucher_base_url' => 'Tokovoucher Base URL',
 
         // Integrasi — WhatsApp Gateway (Fonnte)
         'fonnte_token' => 'Fonnte Token',
@@ -51,8 +60,12 @@ class SettingController extends Controller
      * ulang — input kosong berarti mempertahankan nilai tersimpan.
      */
     protected const SECRET_KEYS = [
-        'tripay_api_key',
+        'belibayar_api_key',
+        'belibayar_secret_key',
+        'belibayar_webhook_secret',
         'digiflazz_api_key',
+        'tokovoucher_secret_key',
+        'tokovoucher_signature',
         'fonnte_token',
     ];
 
@@ -93,9 +106,9 @@ class SettingController extends Controller
             'clear_settings' => ['nullable', 'array'],
             'clear_settings.*' => ['boolean'],
             // Rule `image` Laravel tidak mengenali .ico, jadi validasi mime
-            // dilakukan eksplisit agar favicon .ico tetap diterima.
-            'site_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,svg,ico', 'max:2048'],
-            'site_favicon' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,svg,ico', 'max:2048'],
+            // dilakukan eksplisit agar favicon .ico tetap diterima. SVG dilarang untuk mencegah Stored XSS.
+            'site_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp,ico', 'max:2048'],
+            'site_favicon' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp,ico', 'max:2048'],
         ]);
 
         $changes = [];
@@ -140,8 +153,10 @@ class SettingController extends Controller
                 }
 
                 $value = trim((string) ($validated['settings'][$key] ?? ''));
+                $value = str_replace(["\r", "\n"], '', $value);
 
-                if ($value !== '') {
+                // Abaikan input kosong atau yang hanya berisi karakter mask pelindung (seperti • atau *)
+                if ($value !== '' && ! preg_match('/^[\x{2022}\*•\s]+$/u', $value)) {
                     SiteSetting::updateOrCreate(['key' => $key], ['value' => $value]);
                     $changes[$key] = '[tersembunyi]';
                 }

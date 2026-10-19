@@ -1,5 +1,5 @@
 <section class="rounded-2xl border border-slate-800 bg-slate-800/40 p-5" aria-label="Mengapa memilih kami">
-    <h2 class="mb-4 text-center font-heading text-base font-bold text-slate-100">🏆 Mengapa {{ $siteName ?? 'CaptShop' }}?</h2>
+    <h2 class="mb-4 text-center font-heading text-base font-bold text-slate-100">Mengapa {{ $siteName ?? 'CAPTSHOP' }}?</h2>
 
     <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div class="flex flex-col items-center gap-2 text-center">

@@ -13,7 +13,6 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
-        health: '/up',
         then: function () {
             if (is_file($routes = dirname(__DIR__).'/routes/webhook.php')) {
                 Route::middleware('api')->group($routes);
@@ -25,7 +24,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // IP asli visitor hanya terbaca dari header proxy. Tanpa trust, semua
         // request tampak berasal dari IP proxy — rate limiter, throttle login,
         // dan log audit menjadi tidak valid.
-        $middleware->trustProxies(at: array_filter(array_map('trim', explode(',', (string) env('TRUSTED_PROXIES', '')))));
+        $trustedProxies = env('TRUSTED_PROXIES', '');
+        $middleware->trustProxies(at: $trustedProxies === '*' ? '*' : array_filter(array_map('trim', explode(',', (string) $trustedProxies))));
+
+        $middleware->validateCsrfTokens(except: [
+            'game/check-nickname',
+        ]);
 
         $middleware->alias([
             'admin.auth' => AdminAuth::class,

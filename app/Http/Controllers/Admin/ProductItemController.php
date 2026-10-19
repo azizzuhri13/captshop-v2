@@ -13,18 +13,33 @@ class ProductItemController extends Controller
 {
     public function index(Request $request): View
     {
+        $productId = $request->input('product_id');
+        $status = $request->input('status');
+
         $items = ProductItem::query()
             ->with('product:id,name')
             ->withExists('transactions')
-            ->when($request->input('q'), fn ($query, $q) => $query->whereHas(
-                'product',
-                fn ($product) => $product->where('name', 'like', "%{$q}%")
-            )->orWhere('name', 'like', "%{$q}%"))
-            ->orderBy('sort_order')
-            ->paginate(20)
+            ->when($request->input('q'), function ($query, $q) {
+                $query->where(function ($sub) use ($q) {
+                    $sub->whereHas('product', fn ($p) => $p->where('name', 'like', "%{$q}%"))
+                        ->orWhere('product_items.name', 'like', "%{$q}%")
+                        ->orWhere('product_items.supplier_item_code', 'like', "%{$q}%");
+                });
+            })
+            ->when($productId, fn ($query, $pid) => $query->where('product_items.product_id', $pid))
+            ->when($status !== null && $status !== '', fn ($query) => $query->where('product_items.is_active', (bool) $status))
+            ->leftJoin('products', 'products.id', '=', 'product_items.product_id')
+            ->select('product_items.*')
+            ->orderBy('products.name')
+            ->orderBy('product_items.sort_order')
+            ->orderBy('product_items.sell_price')
+            ->paginate(30)
             ->withQueryString();
 
-        return view('admin.product-items.index', compact('items'));
+        $products = Product::query()->orderBy('name')->pluck('name', 'id');
+        $selectedProduct = $productId ? Product::find($productId) : null;
+
+        return view('admin.product-items.index', compact('items', 'products', 'selectedProduct'));
     }
 
     public function create(Request $request): View
@@ -58,7 +73,18 @@ class ProductItemController extends Controller
 
     public function update(Request $request, ProductItem $productItem): RedirectResponse
     {
-        $productItem->update($this->validated($request));
+        $validated = $this->validated($request);
+        $oldBuyPrice = (float) $productItem->buy_price;
+        $productItem->update($validated);
+        $newBuyPrice = (float) $productItem->buy_price;
+
+        if ($oldBuyPrice !== $newBuyPrice) {
+            foreach ($productItem->transactions()->get() as $trx) {
+                $discount = (float) ($trx->coupon_discount ?? 0);
+                $newProfit = round((float) $trx->amount - $discount - $newBuyPrice, 2);
+                $trx->update(['profit' => (string) $newProfit]);
+            }
+        }
 
         return redirect()->route('admin.product-items.index')->with('success', 'Item berhasil diperbarui.');
     }

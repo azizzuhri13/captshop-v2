@@ -4,41 +4,54 @@
 @section('page-title', 'Dashboard')
 
 @section('content')
+    @php
+        $revToday = (float) $today->revenue;
+        $profToday = (float) $today->profit;
+        $cntToday = (int) $today->total_count;
+        $pendToday = (int) $today->pending_count;
+        $failToday = (int) $today->failed_count;
+    @endphp
+
     {{-- Stat cards --}}
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div class="rounded-xl border border-slate-800 bg-slate-800/40 p-4">
-            <p class="text-xs text-slate-500">Transaksi Hari Ini</p>
-            <p class="mt-1 font-heading text-2xl font-bold text-slate-100">{{ number_format((float) $today->total_count) }}</p>
+        <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
+            <p class="text-xs font-medium text-slate-400">Transaksi Hari Ini</p>
+            <p class="mt-1 font-mono text-2xl font-bold {{ $cntToday > 0 ? 'text-white' : 'text-slate-400' }}">{{ number_format($cntToday) }}</p>
         </div>
 
-        <div class="rounded-xl border border-slate-800 bg-slate-800/40 p-4">
-            <p class="text-xs text-slate-500">Revenue Hari Ini</p>
-            <p class="mt-1 font-heading text-2xl font-bold text-secondary">Rp {{ number_format((float) $today->revenue, 0, ',', '.') }}</p>
+        <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
+            <p class="text-xs font-medium text-slate-400">Revenue Hari Ini</p>
+            <p class="mt-1 font-mono text-2xl font-bold {{ $revToday > 0 ? 'text-emerald-400' : 'text-slate-400' }}">Rp {{ number_format($revToday, 0, ',', '.') }}</p>
         </div>
 
-        <div class="rounded-xl border border-slate-800 bg-slate-800/40 p-4">
-            <p class="text-xs text-slate-500">Profit Hari Ini</p>
-            <p class="mt-1 font-heading text-2xl font-bold text-primary-light">Rp {{ number_format((float) $today->profit, 0, ',', '.') }}</p>
+        <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
+            <p class="text-xs font-medium text-slate-400">Profit Hari Ini</p>
+            <p class="mt-1 font-mono text-2xl font-bold {{ $profToday > 0 ? 'text-emerald-400' : 'text-slate-400' }}">Rp {{ number_format($profToday, 0, ',', '.') }}</p>
         </div>
 
-        <div class="rounded-xl border border-slate-800 bg-slate-800/40 p-4">
-            <p class="text-xs text-slate-500">Pending / Gagal</p>
-            <p class="mt-1 font-heading text-2xl font-bold">
-                <span class="text-amber-400">{{ number_format((float) $today->pending_count) }}</span>
+        <div class="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
+            <p class="text-xs font-medium text-slate-400">Pending / Gagal</p>
+            <p class="mt-1 font-mono text-2xl font-bold">
+                <span class="{{ $pendToday > 0 ? 'text-amber-400' : 'text-slate-400' }}">{{ number_format($pendToday) }}</span>
                 <span class="text-slate-600">/</span>
-                <span class="text-red-400">{{ number_format((float) $today->failed_count) }}</span>
+                <span class="{{ $failToday > 0 ? 'text-rose-400' : 'text-slate-400' }}">{{ number_format($failToday) }}</span>
             </p>
         </div>
     </div>
 
     {{-- Ringkasan bulan ini --}}
-    <div class="mt-3 rounded-xl border border-slate-800 bg-slate-800/40 p-4">
+    <div class="mt-3 rounded-xl border border-slate-800/80 bg-gradient-to-r from-slate-900/60 to-slate-900/30 p-4">
         <div class="flex items-center justify-between">
             <div>
-                <p class="text-xs text-slate-500">Bulan {{ now()->translatedFormat('F Y') }}</p>
-                <p class="mt-1 font-heading text-lg font-bold text-slate-100">{{ number_format((float) $month->total_count) }} transaksi</p>
+                <p class="text-xs font-medium text-slate-400">Bulan {{ now()->translatedFormat('F Y') }}</p>
+                <p class="mt-0.5 text-sm text-slate-300 font-semibold">{{ number_format((float) $month->total_count) }} transaksi</p>
             </div>
-            <p class="font-heading text-lg font-bold text-secondary">Rp {{ number_format((float) $month->revenue, 0, ',', '.') }}</p>
+            <div class="text-right">
+                <p class="font-mono text-xl font-bold text-white">Rp {{ number_format((float) $month->revenue, 0, ',', '.') }}</p>
+                @if((float) $month->revenue > 0)
+                    <span class="text-[10px] text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">Lunas</span>
+                @endif
+            </div>
         </div>
     </div>
 

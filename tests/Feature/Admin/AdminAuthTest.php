@@ -23,7 +23,9 @@ class AdminAuthTest extends TestCase
 
     public function test_login_form_renders(): void
     {
-        $this->get('/admin/login')->assertStatus(200)->assertSee('Panel Admin');
+        $this->get('/root-capt')->assertStatus(200)->assertSee('Panel Admin');
+        $this->get('/admin/login')->assertStatus(404);
+        $this->get('/portal-admin')->assertStatus(404);
     }
 
     public function test_admin_cannot_access_dashboard_without_login(): void
@@ -37,7 +39,7 @@ class AdminAuthTest extends TestCase
     {
         $admin = $this->admin();
 
-        $response = $this->post('/admin/login', [
+        $response = $this->post(route('admin.login'), [
             'email' => $admin->email,
             'password' => 'secret-password',
         ]);
@@ -50,7 +52,7 @@ class AdminAuthTest extends TestCase
     {
         $admin = $this->admin();
 
-        $response = $this->post('/admin/login', [
+        $response = $this->post(route('admin.login'), [
             'email' => $admin->email,
             'password' => 'wrong-password',
         ]);
@@ -59,12 +61,32 @@ class AdminAuthTest extends TestCase
         $this->assertGuest('admin');
     }
 
+    public function test_login_rate_limiting_locks_out_after_five_attempts(): void
+    {
+        $admin = $this->admin();
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->post(route('admin.login'), [
+                'email' => $admin->email,
+                'password' => 'wrong-password',
+            ]);
+        }
+
+        // Percobaan ke-6 harus ditolak oleh throttle:5,1 (429 Too Many Requests)
+        $response = $this->post(route('admin.login'), [
+            'email' => $admin->email,
+            'password' => 'wrong-password',
+        ]);
+
+        $response->assertStatus(429);
+    }
+
     public function test_inactive_admin_cannot_login(): void
     {
         $admin = $this->admin();
         $admin->update(['is_active' => false]);
 
-        $response = $this->post('/admin/login', [
+        $response = $this->post(route('admin.login'), [
             'email' => $admin->email,
             'password' => 'secret-password',
         ]);

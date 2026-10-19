@@ -42,13 +42,40 @@
         }"
     >
         <div class="flex flex-wrap items-center justify-between gap-3">
-            <form method="GET" class="flex items-center gap-2">
-                <input type="search" name="q" value="{{ request('q') }}" placeholder="Cari item/produk..." class="input-dark !w-64 !py-2">
+            <form method="GET" class="flex flex-wrap items-center gap-2">
+                <input type="search" name="q" value="{{ request('q') }}" placeholder="Cari item/SKU..." class="input-dark !w-48 !py-2">
+
+                <select name="product_id" onchange="this.form.submit()" class="input-dark !w-48 !py-2 text-xs">
+                    <option value="">-- Semua Produk --</option>
+                    @foreach ($products as $id => $name)
+                        <option value="{{ $id }}" @selected(request('product_id') == $id)>{{ $name }}</option>
+                    @endforeach
+                </select>
+
+                <select name="status" onchange="this.form.submit()" class="input-dark !w-32 !py-2 text-xs">
+                    <option value="">-- Semua Status --</option>
+                    <option value="1" @selected(request('status') === '1')>Aktif</option>
+                    <option value="0" @selected(request('status') === '0')>Nonaktif</option>
+                </select>
+
                 <button type="submit" class="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-200 hover:border-primary">Cari</button>
+                @if (request()->hasAny(['q', 'product_id', 'status']))
+                    <a href="{{ route('admin.product-items.index') }}" class="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:text-white" title="Reset filter">Reset</a>
+                @endif
             </form>
 
-            <a href="{{ route('admin.product-items.create') }}" class="btn-primary !py-2 text-sm">+ Item Baru</a>
+            <a href="{{ route('admin.product-items.create', array_filter(['product' => request('product_id')])) }}" class="btn-primary !py-2 text-sm">+ Item Baru</a>
         </div>
+
+        @if ($selectedProduct)
+            <div class="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/10 px-4 py-2.5 text-xs text-slate-300">
+                <div class="flex items-center gap-2">
+                    <span class="text-primary font-semibold">Filter Aktif:</span>
+                    <span>Menampilkan item khusus <strong class="text-white">{{ $selectedProduct->name }}</strong> ({{ $items->total() }} item)</span>
+                </div>
+                <a href="{{ route('admin.product-items.index') }}" class="font-medium text-primary-light hover:underline">Lihat Semua Produk &times;</a>
+            </div>
+        @endif
 
         {{-- Bar aksi massal: hanya muncul saat ada item dicentang.
              Satu form, satu sumber ID; tiap tombol menentukan tujuannya
@@ -145,7 +172,11 @@
                                     <span class="text-xs text-slate-600">—</span>
                                 @endif
                             </td>
-                            <td class="p-3 text-slate-400">{{ $item->product?->name }}</td>
+                            <td class="p-3">
+                                <a href="{{ route('admin.product-items.index', ['product_id' => $item->product_id]) }}" class="inline-flex items-center rounded-md border border-slate-700/60 bg-slate-800/80 px-2 py-0.5 text-xs text-slate-300 transition hover:border-primary hover:text-white" title="Filter hanya produk {{ $item->product?->name }}">
+                                    {{ $item->product?->name }}
+                                </a>
+                            </td>
                             <td class="p-3 font-mono text-xs text-slate-400">{{ $item->supplier_item_code ?? '—' }}</td>
                             <td class="p-3 text-slate-400">Rp {{ number_format((float) $item->buy_price, 0, ',', '.') }}</td>
                             <td class="p-3 font-medium text-slate-200">Rp {{ number_format((float) $item->sell_price, 0, ',', '.') }}</td>

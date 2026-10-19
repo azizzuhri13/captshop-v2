@@ -1,16 +1,16 @@
 @extends('layouts.app')
 
-@section('title', 'Tentang Kami — '.($siteName ?? 'CaptShop'))
+@section('title', 'Tentang Kami — '.($siteName ?? 'CAPTSHOP'))
 
 @section('content')
     <div class="mx-auto max-w-xl space-y-4">
         <header>
-            <h1 class="font-heading text-xl font-bold text-slate-100">Tentang {{ $siteName ?? 'CaptShop' }}</h1>
+            <h1 class="font-heading text-xl font-bold text-slate-100">Tentang {{ $siteName ?? 'CAPTSHOP' }}</h1>
         </header>
 
         <div class="space-y-4 rounded-2xl border border-slate-800 bg-slate-800/40 p-5 text-sm leading-relaxed text-slate-400">
             <p>
-                {{ $siteName ?? 'CaptShop' }} adalah platform top-up game, voucher digital, dan pembayaran PPOB
+                {{ $siteName ?? 'CAPTSHOP' }} adalah platform top-up game, voucher digital, dan pembayaran PPOB
                 yang berdiri untuk memudahkan Anda membeli produk digital favorit dengan cepat, aman,
                 dan tanpa perlu registrasi akun.
             </p>

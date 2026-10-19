@@ -13,7 +13,7 @@
 
                     {{-- Header --}}
                     <tr>
-                        <td style="background-color:#6C3CE1;padding:24px 32px;">
+                        <td style="background-color:#D92525;padding:24px 32px;">
                             <p style="margin:0;font-size:20px;font-weight:bold;color:#ffffff;">{{ $siteName }}</p>
                             <p style="margin:4px 0 0;font-size:13px;color:#e9e2fa;">Bukti Pembayaran — {{ $transaction->invoice_id }}</p>
                         </td>
@@ -76,7 +76,7 @@
                                 @endif
                                 <tr>
                                     <td style="padding:14px 0;font-size:15px;color:#0f172a;font-weight:bold;">Total Dibayar</td>
-                                    <td align="right" style="padding:14px 0;font-size:18px;color:#6C3CE1;font-weight:bold;">Rp {{ number_format((float) $transaction->total, 0, ',', '.') }}</td>
+                                    <td align="right" style="padding:14px 0;font-size:18px;color:#D92525;font-weight:bold;">Rp {{ number_format((float) $transaction->total, 0, ',', '.') }}</td>
                                 </tr>
                             </table>
                         </td>
@@ -86,7 +86,7 @@
                     <tr>
                         <td style="padding:24px 32px;" align="center">
                             <a href="{{ url('/invoice/'.$transaction->invoice_id) }}"
-                               style="display:inline-block;background-color:#6C3CE1;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:12px 32px;border-radius:8px;">
+                               style="display:inline-block;background-color:#D92525;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:12px 32px;border-radius:8px;">
                                 Lihat Detail Pesanan
                             </a>
                         </td>

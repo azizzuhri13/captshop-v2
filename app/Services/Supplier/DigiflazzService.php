@@ -44,9 +44,9 @@ class DigiflazzService implements SupplierInterface
     public function checkBalance(): array
     {
         $result = $this->client->post('/cek-saldo', [
-            'cmd' => 'saldo',
+            'cmd' => 'deposit',
             'username' => $this->username(),
-            'sign' => md5($this->username().$this->apiKey().'deposits'),
+            'sign' => md5($this->username().$this->apiKey().'depo'),
         ]);
 
         return [
@@ -67,7 +67,7 @@ class DigiflazzService implements SupplierInterface
 
     /**
      * Resolve data pelanggan menjadi satu customer_no untuk DigiFlazz.
-     * Produk seperti ML memerlukan format "user_id zone_id" (dipisah spasi).
+     * Untuk game ber-zone seperti Mobile Legends, formatnya gabungan user_id + zone_id langsung.
      */
     protected function resolveCustomerNo(array $data): string
     {
@@ -75,7 +75,7 @@ class DigiflazzService implements SupplierInterface
         $zone = $data['zone_id'] ?? null;
 
         if ($fields !== null && $zone !== null) {
-            return trim($fields.' '.$zone);
+            return trim((string) $fields).trim((string) $zone);
         }
 
         $first = reset($data);

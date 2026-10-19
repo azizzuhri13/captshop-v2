@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', $category->name.' — '.($siteName ?? 'CaptShop'))
+@section('title', $category->name.' — '.($siteName ?? 'CAPTSHOP'))
 
 @section('content')
     <div class="space-y-6">

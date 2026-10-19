@@ -35,7 +35,12 @@
                             @endif
                         </td>
                         <td class="p-3 text-slate-400">{{ $product->category?->name }}</td>
-                        <td class="p-3 text-slate-400">{{ $product->items->count() }}</td>
+                        <td class="p-3">
+                            <a href="{{ route('admin.product-items.index', ['product_id' => $product->id]) }}" class="inline-flex items-center gap-1 rounded-md border border-slate-700/60 bg-slate-800/80 px-2 py-0.5 text-xs text-slate-300 transition hover:border-primary hover:text-white" title="Lihat item {{ $product->name }}">
+                                <span>{{ $product->items->count() }} item</span>
+                                <span class="text-[10px] text-slate-500">&rarr;</span>
+                            </a>
+                        </td>
                         <td class="p-3 text-slate-400">{{ $product->supplier_type ?: '—' }}</td>
                         <td class="p-3">
                             <span class="rounded-full px-2 py-0.5 text-xs font-semibold {{ $product->is_active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-500/15 text-slate-400' }}">

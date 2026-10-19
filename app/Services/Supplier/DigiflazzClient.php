@@ -26,8 +26,10 @@ class DigiflazzClient
         $response = $this->request()->post($endpoint, $data);
 
         if (! $response->successful()) {
+            $errDetail = $response->json('data.message') ?? $response->json('message') ?? ('HTTP '.$response->status());
+            $rc = $response->json('data.rc') ?? $response->json('rc') ?? $response->status();
             throw SupplierException::requestFailed(
-                'DigiFlazz '.$endpoint.' gagal: HTTP '.$response->status()
+                "DigiFlazz {$endpoint} gagal ({$rc}): {$errDetail}"
             );
         }
 
@@ -37,11 +39,14 @@ class DigiflazzClient
             throw SupplierException::requestFailed('DigiFlazz '.$endpoint.' mengembalikan response tidak valid.');
         }
 
-        // DigiFlazz memakai bentuk {data: {...}} baik untuk sukses maupun error.
-        if (isset($json['data']['status']) && strtolower((string) $json['data']['status']) !== 'sukses') {
-            $message = $json['data']['message'] ?? $json['data']['rc'] ?? 'unknown error';
+        // DigiFlazz memakai bentuk {data: {...}} baik untuk sukses, pending, maupun error.
+        if (isset($json['data']['status'])) {
+            $status = strtolower((string) $json['data']['status']);
+            if (! in_array($status, ['sukses', 'pending', 'proses'], true)) {
+                $message = $json['data']['message'] ?? $json['data']['rc'] ?? 'unknown error';
 
-            throw SupplierException::requestFailed('DigiFlazz '.$endpoint.' error: '.(is_array($message) ? json_encode($message) : $message));
+                throw SupplierException::requestFailed('DigiFlazz '.$endpoint.' error: '.(is_array($message) ? json_encode($message) : $message));
+            }
         }
 
         return $json;
@@ -49,12 +54,18 @@ class DigiflazzClient
 
     protected function request(): PendingRequest
     {
-        if (empty(config('supplier.digiflazz.username')) || empty(config('supplier.digiflazz.api_key'))) {
+        if (! Credentials::get('digiflazz_username', config('supplier.digiflazz.username'))
+            || ! Credentials::get('digiflazz_api_key', config('supplier.digiflazz.api_key'))) {
             throw SupplierException::notConfigured();
         }
 
         return Http::baseUrl($this->baseUrl)
             ->timeout(60)
+            ->withOptions([
+                'curl' => [
+                    CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+                ],
+            ])
             ->acceptJson();
     }
 }

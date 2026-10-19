@@ -17,3 +17,7 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
+*.zip
+public/household/
+public/admin/config.json
+public/.well-known/

@@ -30,7 +30,7 @@ class TrackController extends Controller
 
         $transactions = Transaction::query()
             ->where(function ($query) use ($q) {
-                $query->where('invoice_id', 'like', "{$q}%")
+                $query->where('invoice_id', $q)
                     ->orWhere('customer_phone', $q);
             })
             ->with(['productItem.product'])

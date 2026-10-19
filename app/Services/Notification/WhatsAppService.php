@@ -52,7 +52,7 @@ class WhatsAppService
     public function sendInvoiceNotification(Transaction $transaction): bool
     {
         $message = implode("\n", [
-            '*'.(SiteSetting::get('site_name') ?? 'CaptShop').'*',
+            '*'.(SiteSetting::get('site_name') ?? 'CAPTSHOP').'*',
             '',
             'Pesanan Anda telah dibuat.',
             'Invoice: *'.$transaction->invoice_id.'*',
@@ -72,7 +72,7 @@ class WhatsAppService
     public function sendPaidNotification(Transaction $transaction): bool
     {
         $message = implode("\n", [
-            '*'.(SiteSetting::get('site_name') ?? 'CaptShop').'*',
+            '*'.(SiteSetting::get('site_name') ?? 'CAPTSHOP').'*',
             '',
             'Pembayaran untuk pesanan *'.$transaction->invoice_id.'* telah kami terima. ✅',
             'Item: '.$transaction->productItem?->name,
@@ -90,13 +90,13 @@ class WhatsAppService
     public function sendSuccessNotification(Transaction $transaction): bool
     {
         $message = implode("\n", [
-            '*'.(SiteSetting::get('site_name') ?? 'CaptShop').'*',
+            '*'.(SiteSetting::get('site_name') ?? 'CAPTSHOP').'*',
             '',
             'Pesanan *'.$transaction->invoice_id.'* telah berhasil diproses. 🎉',
             'Item: '.$transaction->productItem?->name,
             $transaction->supplier_sn ? 'SN: '.$transaction->supplier_sn : null,
             '',
-            'Terima kasih sudah berbelanja di '.(SiteSetting::get('site_name') ?? 'CaptShop').'!',
+            'Terima kasih sudah berbelanja di '.(SiteSetting::get('site_name') ?? 'CAPTSHOP').'!',
         ]);
 
         return $this->send($transaction->customer_phone, $message);

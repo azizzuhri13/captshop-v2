@@ -11,9 +11,9 @@ class CheckMaintenanceMode
 {
     /**
      * Prefix route yang tetap dapat diakses saat maintenance mode aktif:
-     * panel admin (untuk mematikan mode) dan webhook payment gateway.
+     * panel admin (untuk mematikan mode), login rahasia, dan webhook payment gateway.
      */
-    protected const EXEMPT_PREFIXES = ['admin', 'webhook'];
+    protected const EXEMPT_PREFIXES = ['admin', 'root-capt', 'webhook'];
 
     public function handle(Request $request, Closure $next): Response
     {

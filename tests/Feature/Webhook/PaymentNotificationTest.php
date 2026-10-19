@@ -25,7 +25,8 @@ class PaymentNotificationTest extends TestCase
     {
         parent::setUp();
 
-        Config::set('payment.tripay.private_key', 'test-private-key');
+        Config::set('payment.belibayar.webhook_secret', 'test-webhook-secret');
+        Config::set('payment.belibayar.merchant_id', 'BYR-TEST');
     }
 
     protected function createPendingTransaction(): Transaction
@@ -57,6 +58,7 @@ class PaymentNotificationTest extends TestCase
             'profit' => '2000',
             'payment_method' => 'QRIS',
             'payment_channel' => 'QRIS',
+            'payment_gateway' => 'belibayar', 'payment_ref' => 'byrtrx_notif',
             'status' => 'pending',
         ]);
     }
@@ -76,14 +78,17 @@ class PaymentNotificationTest extends TestCase
     protected function postPaidWebhook(Transaction $transaction)
     {
         $payload = [
-            'merchant_ref' => $transaction->invoice_id,
-            'status' => 'PAID',
-            'amount' => 15105,
+            'reference' => $transaction->invoice_id,
+            'transaction_id' => $transaction->payment_ref,
+            'merchant_id' => 'BYR-TEST', 'method_api' => 'direct',
+            'payment_channel' => 'QRIS', 'status' => 'paid', 'amount' => 15105,
         ];
+        $raw = json_encode($payload, JSON_UNESCAPED_SLASHES);
 
-        return $this->postJson('/webhook/tripay', $payload, [
-            'X-Callback-Signature' => hash_hmac('sha256', $transaction->invoice_id.'PAID15105', 'test-private-key'),
-        ]);
+        return $this->call('POST', '/webhook/belibayar', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_BELIBAYAR_SIGNATURE' => hash_hmac('sha256', $raw, 'test-webhook-secret'),
+        ], $raw);
     }
 
     public function test_order_creation_sends_invoice_email_and_whatsapp(): void
@@ -110,7 +115,7 @@ class PaymentNotificationTest extends TestCase
         ]);
 
         PaymentChannel::create([
-            'gateway' => 'tripay',
+            'gateway' => 'belibayar',
             'code' => 'QRIS',
             'name' => 'QRIS',
             'group' => 'QRIS',
@@ -120,8 +125,13 @@ class PaymentNotificationTest extends TestCase
         ]);
 
         $gateway = $this->mock(PaymentGatewayInterface::class);
-        $gateway->shouldReceive('gatewayName')->andReturn('tripay');
-        $gateway->shouldReceive('createTransaction')->andReturn(['reference' => 'REF-1']);
+        $gateway->shouldReceive('gatewayName')->andReturn('belibayar');
+        $gateway->shouldReceive('createTransaction')->andReturnUsing(fn ($transaction) => [
+            'reference' => $transaction->invoice_id, 'transaction_id' => 'byrtrx_notif',
+            'payment_channel' => 'QRIS', 'amount' => (int) $transaction->total,
+            'status' => 'pending', 'qr_url' => 'https://link.belibayar.id/test.png',
+            'expired_at' => now()->addHour()->timestamp,
+        ]);
         $this->app->instance(PaymentGatewayInterface::class, $gateway);
 
         $this->post('/order', [

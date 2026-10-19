@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
+use App\Models\Article;
 use App\Models\Banner;
 use App\Models\Category;
 use App\Models\Product;
@@ -55,7 +56,37 @@ class HomeController extends Controller
             ->take(10)
             ->get();
 
-        return view('frontend.home', compact('banners', 'categories', 'popularProducts', 'flashSaleItems'));
+        $premiumAppsCategory = Category::query()
+            ->where('is_active', true)
+            ->where(function ($query) {
+                $query->where('slug', 'apps-premium')
+                    ->orWhere('name', 'like', '%App%');
+            })
+            ->first();
+
+        $premiumAppsProducts = $premiumAppsCategory !== null
+            ? Product::query()
+                ->where('is_active', true)
+                ->where('category_id', $premiumAppsCategory->id)
+                ->with([
+                    'category:id,slug,name',
+                    'items' => fn ($query) => $query->where('is_active', true)->orderBy('sell_price'),
+                ])
+                ->orderBy('sort_order')
+                ->take(12)
+                ->get()
+            : collect();
+
+        $latestArticles = Article::query()
+            ->where('is_published', true)
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now())
+            ->with('author:id,name')
+            ->latest('published_at')
+            ->take(3)
+            ->get();
+
+        return view('frontend.home', compact('banners', 'categories', 'popularProducts', 'flashSaleItems', 'premiumAppsProducts', 'premiumAppsCategory', 'latestArticles'));
     }
 
     /**

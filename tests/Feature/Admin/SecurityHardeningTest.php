@@ -57,14 +57,14 @@ class SecurityHardeningTest extends TestCase
 
     public function test_settings_page_does_not_leak_stored_secrets(): void
     {
-        SiteSetting::set('tripay_api_key', 'SECRET-TRIPAY-KEY-123');
+        SiteSetting::set('belibayar_api_key', 'SECRET-BELIBAYAR-KEY-123');
 
         $this->actingAs($this->superAdmin(), 'admin');
 
         $response = $this->get(route('admin.settings.edit'));
 
         $response->assertOk();
-        $this->assertStringNotContainsString('SECRET-TRIPAY-KEY-123', $response->getContent());
+        $this->assertStringNotContainsString('SECRET-BELIBAYAR-KEY-123', $response->getContent());
         $this->assertStringNotContainsString('value="SECRET', $response->getContent());
     }
 
@@ -83,6 +83,21 @@ class SecurityHardeningTest extends TestCase
 
         $this->assertSame('FONNTE-OLD-TOKEN', SiteSetting::get('fonnte_token'));
         $this->assertSame('CaptShop Baru', SiteSetting::get('site_name'));
+    }
+
+    public function test_settings_secret_not_overwritten_when_filled_with_bullet_mask_characters(): void
+    {
+        SiteSetting::set('belibayar_secret_key', 'REAL-SECRET-12345');
+
+        $this->actingAs($this->superAdmin(), 'admin');
+
+        $this->put(route('admin.settings.update'), [
+            'settings' => [
+                'belibayar_secret_key' => '••••••••••••••••••••••••••••••',
+            ],
+        ]);
+
+        $this->assertSame('REAL-SECRET-12345', SiteSetting::get('belibayar_secret_key'));
     }
 
     public function test_settings_secret_can_be_cleared(): void
@@ -200,7 +215,7 @@ class SecurityHardeningTest extends TestCase
         // Admin panel & webhook tetap bisa diakses (403 = signature invalid,
         // artinya request lolos middleware maintenance dan sampai controller).
         $this->get(route('admin.login'))->assertOk();
-        $this->postJson('/webhook/tripay', [])->assertStatus(403);
+        $this->postJson('/webhook/belibayar', [])->assertStatus(403);
 
         SiteSetting::set('maintenance_mode', 'false');
 
@@ -210,5 +225,45 @@ class SecurityHardeningTest extends TestCase
     public function test_maintenance_mode_disabled_by_default(): void
     {
         $this->get('/')->assertOk();
+    }
+
+    public function test_settings_rejects_svg_upload_for_logo(): void
+    {
+        Storage::fake('public');
+        $this->actingAs($this->superAdmin(), 'admin');
+
+        $svgFile = UploadedFile::fake()->create('malicious.svg', 10, 'image/svg+xml');
+
+        $response = $this->put(route('admin.settings.update'), [
+            'site_logo' => $svgFile,
+        ]);
+
+        $response->assertSessionHasErrors('site_logo');
+    }
+
+    public function test_cannot_demote_or_deactivate_last_active_super_admin(): void
+    {
+        $admin = $this->superAdmin();
+        $this->actingAs($admin, 'admin');
+
+        $response = $this->put(route('admin.accounts.update', $admin), [
+            'name' => 'Super Admin',
+            'email' => $admin->email,
+            'role' => 'operator',
+            'is_active' => '1',
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertSame('super_admin', $admin->fresh()->role);
+
+        $responseDeactivate = $this->put(route('admin.accounts.update', $admin), [
+            'name' => 'Super Admin',
+            'email' => $admin->email,
+            'role' => 'super_admin',
+            'is_active' => '0',
+        ]);
+
+        $responseDeactivate->assertSessionHas('error');
+        $this->assertTrue($admin->fresh()->is_active);
     }
 }

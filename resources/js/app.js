@@ -53,6 +53,13 @@ Alpine.data('orderForm', (config) => ({
     couponChecking: false,
     couponError: '',
     processing: false,
+    isGameAccount: Boolean(config.isGameAccount),
+    gameSlug: config.gameSlug || '',
+    checkNicknameUrl: config.checkNicknameUrl || '',
+    nickname: '',
+    nicknameChecking: false,
+    nicknameError: '',
+    nicknameDebounceTimer: null,
 
     init() {
         // Saat nominal diganti, kupon harus divalidasi ulang (diskon dan
@@ -62,6 +69,10 @@ Alpine.data('orderForm', (config) => ({
                 this.applyCoupon();
             }
         });
+
+        if (config.isGameAccount && config.checkNicknameUrl) {
+            this.$watch('customerData', () => this.debouncedCheckNickname(), { deep: true });
+        }
     },
 
     get selectedItem() {
@@ -173,6 +184,56 @@ Alpine.data('orderForm', (config) => ({
 
     formatRupiah(value) {
         return 'Rp ' + Number(value || 0).toLocaleString('id-ID');
+    },
+
+    debouncedCheckNickname() {
+        const uid = (this.customerData.user_id || '').trim();
+        const zid = (this.customerData.zone_id || '').trim();
+        const needsZone = (config.gameSlug || '').includes('legend') || (config.gameSlug || '') === 'mlbb' || (config.gameSlug || '').includes('chess') || (config.gameSlug || '') === 'mcgg';
+
+        if (! uid || (needsZone && ! zid)) {
+            this.nickname = '';
+            this.nicknameError = '';
+            return;
+        }
+
+        clearTimeout(this.nicknameDebounceTimer);
+        this.nicknameDebounceTimer = setTimeout(() => this.checkNickname(uid, zid), 500);
+    },
+
+    async checkNickname(userId, zoneId) {
+        this.nicknameChecking = true;
+        this.nicknameError = '';
+
+        try {
+            const res = await fetch(config.checkNicknameUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                },
+                body: JSON.stringify({
+                    game_code: config.gameSlug,
+                    user_id: userId,
+                    zone_id: zoneId || null,
+                }),
+            });
+
+            const data = await res.json();
+            if (data.valid && data.nickname) {
+                this.nickname = data.nickname;
+                this.nicknameError = '';
+            } else {
+                this.nickname = '';
+                this.nicknameError = data.message || 'ID Akun tidak ditemukan.';
+            }
+        } catch {
+            this.nickname = '';
+            this.nicknameError = 'Gagal memverifikasi ID akun.';
+        } finally {
+            this.nicknameChecking = false;
+        }
     },
 }));
 

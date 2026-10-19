@@ -1,0 +1,21 @@
+{
+    "imap_server": "{imap.gmail.com:993/imap/ssl/novalidate-cert}INBOX",
+    "email_username": "your_email@gmail.com",
+    "email_password": "your_app_password",
+    "allowed_subjects": [
+        "Kode sandi sekali pakai Anda untuk Disney+",
+        "Kode OTP Anda untuk Disney+",
+        "Your one-time passcode for Disney+",
+        "Netflix: Your sign-in code",
+        "Netflix: Kode masukmu",
+        "Netflix: New sign-in request",
+        "Netflix: Permintaan masuk baru",
+        "Kode verifikasimu",
+        "Your verification code",
+        "Kode verifikasi. Kedaluwarsa dalam 15 mnt.",
+        "Verification code. Expires in 15 mins.",
+        "Kata Sandi Verifikasi Email Anda"
+    ],
+    "allowed_from" :[
+        "no-reply@account.canva.com"]
+}

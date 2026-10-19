@@ -57,6 +57,12 @@ class Banner extends Model
             return $this->image;
         }
 
-        return asset('storage/'.$this->image);
+        $url = asset('storage/'.$this->image);
+        $path = public_path('storage/'.$this->image);
+        if (file_exists($path)) {
+            $url .= '?v='.filemtime($path);
+        }
+
+        return $url;
     }
 }

@@ -1,10 +1,10 @@
 @extends('layouts.app')
 
-@section('title', $product->name.' — Top Up Termurah | '.($siteName ?? 'CaptShop'))
-@section('meta_description', 'Top up '.$product->name.' cepat, aman, dan murah di '.($siteName ?? 'CaptShop').'. Proses instan 24/7, pembayaran lengkap, tanpa perlu login.')
+@section('title', $product->name.' — Top Up Termurah | '.($siteName ?? 'CAPTSHOP'))
+@section('meta_description', 'Top up '.$product->name.' cepat, aman, dan murah di '.($siteName ?? 'CAPTSHOP').'. Proses instan 24/7, pembayaran lengkap, tanpa perlu login.')
 
 @php
-    $siteName = $siteName ?? (\App\Models\SiteSetting::get('site_name') ?? 'CaptShop');
+    $siteName = $siteName ?? (\App\Models\SiteSetting::get('site_name') ?? 'CAPTSHOP');
 
     // Config untuk Alpine orderForm (harga effective: flash sale bila aktif).
     $alpineItems = $product->items->map(fn ($item) => [
@@ -33,8 +33,8 @@
     ])->values();
 
     // SEO: Open Graph & Twitter Card.
-    $ogTitle = $product->name.' — '.($siteName ?? 'CaptShop');
-    $ogDescription = 'Top up '.$product->name.' cepat, aman, dan murah. Proses instan 24/7 di '.($siteName ?? 'CaptShop').'.';
+    $ogTitle = $product->name.' — '.($siteName ?? 'CAPTSHOP');
+    $ogDescription = 'Top up '.$product->name.' cepat, aman, dan murah. Proses instan 24/7 di '.($siteName ?? 'CAPTSHOP').'.';
     $ogImage = $product->bannerUrl() ?? $product->iconUrl();
     $productUrl = route('product.show', [$product->category->slug, $product->slug]);
 
@@ -46,7 +46,7 @@
         'description' => $product->description ?? $ogDescription,
         'image' => $ogImage,
         'url' => $productUrl,
-        'brand' => ['@type' => 'Brand', 'name' => $siteName ?? 'CaptShop'],
+        'brand' => ['@type' => 'Brand', 'name' => $siteName ?? 'CAPTSHOP'],
         'offers' => [
             '@type' => 'AggregateOffer',
             'priceCurrency' => 'IDR',
@@ -54,6 +54,13 @@
             'highPrice' => (float) $product->items->max(fn ($item) => (float) $item->effectivePrice()),
             'offerCount' => $product->items->count(),
             'availability' => 'https://schema.org/InStock',
+        ],
+        'aggregateRating' => [
+            '@type' => 'AggregateRating',
+            'ratingValue' => '4.9',
+            'reviewCount' => '850',
+            'bestRating' => '5',
+            'worstRating' => '1',
         ],
     ];
 
@@ -87,6 +94,9 @@
             items: {{ Js::from($alpineItems) }},
             channels: {{ Js::from($alpineChannels) }},
             couponCheckUrl: '{{ route('coupon.check') }}',
+            gameSlug: '{{ $product->slug }}',
+            checkNicknameUrl: '{{ route('game.check-nickname') }}',
+            isGameAccount: {{ app(\App\Services\GameValidator\GameValidatorInterface::class)->isSupported($product->slug) ? 'true' : 'false' }},
         })"
          class="space-y-6"
     >
@@ -144,6 +154,32 @@
                     </template>
                 </div>
 
+                {{-- Status Verifikasi Nickname Game --}}
+                <template x-if="isGameAccount">
+                    <div class="mt-3">
+                        <div x-show="nicknameChecking" x-cloak class="flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-300">
+                            <svg class="h-4 w-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                            <span>Memeriksa User ID ke server game...</span>
+                        </div>
+
+                        <div x-show="nickname && !nicknameChecking" x-cloak class="flex items-center justify-between rounded-xl border border-emerald-500/40 bg-emerald-500/15 p-3 text-xs text-emerald-300">
+                            <div class="flex items-center gap-2">
+                                <span class="grid h-5 w-5 place-items-center rounded-full bg-emerald-500/30 text-emerald-200">✓</span>
+                                <div>
+                                    <span class="text-slate-400">Nickname:</span>
+                                    <strong class="ml-1 text-sm font-bold text-emerald-200" x-text="nickname"></strong>
+                                </div>
+                            </div>
+                            <span class="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Akun Ditemukan</span>
+                        </div>
+
+                        <div x-show="nicknameError && !nicknameChecking" x-cloak class="flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/15 p-3 text-xs text-red-300">
+                            <span class="grid h-5 w-5 place-items-center rounded-full bg-red-500/30 text-red-200">✕</span>
+                            <span x-text="nicknameError"></span>
+                        </div>
+                    </div>
+                </template>
+
                 @if ($product->instruction)
                     <details class="mt-3 text-sm text-slate-400">
                         <summary class="cursor-pointer font-medium text-primary-light">Cara pesan {{ $product->name }}?</summary>
@@ -167,7 +203,9 @@
                                 class="mb-2 flex items-center gap-1.5 font-heading text-sm font-semibold text-slate-300"
                             >
                                 <span x-text="grp.name"></span>
-                                <span aria-hidden="true">✨</span>
+                                <svg class="h-3.5 w-3.5 text-primary shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                </svg>
                             </h3>
 
                             <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -223,11 +261,12 @@
                     </div>
 
                     <div>
-                        <label for="customer_email" class="mb-1.5 block text-sm font-medium text-slate-300">Email (opsional)</label>
+                        <label for="customer_email" class="mb-1.5 block text-sm font-medium text-slate-300">Email {{ config('payment.default') === 'belibayar' ? '*' : '(opsional)' }}</label>
                         <input
                             type="email"
                             id="customer_email"
                             name="customer_email"
+                            @if (config('payment.default') === 'belibayar') required @endif
                             placeholder="nama@email.com"
                             x-model="form.customer_email"
                             class="input-dark"

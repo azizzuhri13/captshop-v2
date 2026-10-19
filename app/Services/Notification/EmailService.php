@@ -36,6 +36,6 @@ class EmailService
 
     protected function siteName(): string
     {
-        return SiteSetting::get('site_name') ?? 'CaptShop';
+        return SiteSetting::get('site_name') ?? 'CAPTSHOP';
     }
 }

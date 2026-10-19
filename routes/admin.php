@@ -1,11 +1,15 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminAccountController;
+use App\Http\Controllers\Admin\ArticleController;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\BannerController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\CouponController;
+use App\Http\Controllers\Admin\CanvaAccountController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\DisneyAccountController;
+use App\Http\Controllers\Admin\NetflixAccountController;
 use App\Http\Controllers\Admin\PaymentChannelController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductItemController;
@@ -15,14 +19,16 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| Admin Routes (prefix: /admin)
+| Admin Routes (prefix: /admin) & Secret Login (/root-capt)
 |--------------------------------------------------------------------------
 */
 
+// Rute login rahasia di luar prefix standar untuk mencegah brute-force scanner
+Route::get('/root-capt', [AuthController::class, 'loginForm'])->name('admin.login');
+Route::post('/root-capt', [AuthController::class, 'login'])->middleware('throttle:5,1');
+
 Route::prefix('admin')->name('admin.')->group(function () {
-    // Guest admin.
-    Route::get('login', [AuthController::class, 'loginForm'])->name('login');
-    Route::post('login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+    // Logout admin.
     Route::post('logout', [AuthController::class, 'logout'])->name('logout');
 
     // Authenticated admin.
@@ -34,6 +40,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
 
         Route::middleware('admin.can:products.manage')->group(function () {
+            Route::post('netflix-accounts/import', [NetflixAccountController::class, 'import'])->name('netflix-accounts.import');
+            Route::resource('netflix-accounts', NetflixAccountController::class)->only(['index', 'store', 'update', 'destroy']);
+            Route::post('disney-accounts/import', [DisneyAccountController::class, 'import'])->name('disney-accounts.import');
+            Route::resource('disney-accounts', DisneyAccountController::class)->only(['index', 'store', 'update', 'destroy']);
+            Route::post('canva-accounts/import', [CanvaAccountController::class, 'import'])->name('canva-accounts.import');
+            Route::resource('canva-accounts', CanvaAccountController::class)->only(['index', 'store', 'update', 'destroy']);
             Route::resource('products', ProductController::class)->except(['show']);
         });
 
@@ -54,6 +66,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::middleware('admin.can:banners.manage')->group(function () {
             Route::resource('banners', BannerController::class)->except(['show']);
+        });
+
+        Route::middleware('admin.can:articles.manage')->group(function () {
+            Route::resource('articles', ArticleController::class)->except(['show']);
         });
 
         Route::middleware('admin.can:coupons.manage')->group(function () {

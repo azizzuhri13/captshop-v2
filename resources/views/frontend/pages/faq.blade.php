@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'FAQ — '.($siteName ?? 'CaptShop'))
+@section('title', 'FAQ — '.($siteName ?? 'CAPTSHOP'))
 
 @section('content')
     <div class="mx-auto max-w-xl space-y-4">

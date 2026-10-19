@@ -1,5 +1,8 @@
 # PRD: CaptShop — Platform Top-Up Game & PPOB
 
+> **Arsip rancangan awal (bukan konfigurasi operasional).** Referensi Tripay/Midtrans di bawah mencatat rencana lama. Implementasi pembayaran saat ini hanya Belibayar; lihat `BELIBAYAR-ROLLOUT.md` untuk syarat cutover dan status aktivasi.
+
+
 ## 1. Ringkasan Proyek
 
 **CaptShop** adalah platform web untuk top-up game, voucher digital, dan pembayaran PPOB (Payment Point Online Bank) yang terinspirasi dari Codashop, OuraStore, GoatCoins, Takapedia, dan BangJeff. Platform ini memungkinkan pengguna untuk membeli voucher game, diamond, coins, pulsa, token listrik, dan produk digital lainnya dengan proses yang cepat, aman, dan tanpa perlu login.

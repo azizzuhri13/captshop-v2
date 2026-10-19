@@ -57,6 +57,17 @@ class TrackAndPagesTest extends TestCase
         $response->assertSee($transaction->invoice_id);
     }
 
+    public function test_track_prefix_does_not_enumerate_invoices(): void
+    {
+        $transaction = $this->createTransaction();
+
+        $response = $this->post('/cek-transaksi', ['q' => 'INV-']);
+
+        $response->assertStatus(200);
+        $response->assertDontSee($transaction->invoice_id);
+        $response->assertSee('Tidak ada transaksi ditemukan');
+    }
+
     public function test_track_no_result(): void
     {
         $response = $this->post('/cek-transaksi', ['q' => 'INV-NOT-FOUND-XYZ']);

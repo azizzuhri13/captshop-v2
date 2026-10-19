@@ -57,7 +57,7 @@ class FrontendRenderTest extends TestCase
         ]);
 
         $channel = PaymentChannel::create([
-            'gateway' => 'tripay',
+            'gateway' => 'belibayar',
             'code' => 'QRIS',
             'name' => 'QRIS',
             'group' => 'QRIS',
@@ -80,6 +80,33 @@ class FrontendRenderTest extends TestCase
         $response->assertSee('Flash Sale');
         $response->assertSee('Games');
         $response->assertSee('Mengapa');
+    }
+
+    public function test_homepage_renders_apps_premium_slider_when_available(): void
+    {
+        [$category, $product, $item, $banner] = $this->seedFrontendFixture();
+
+        $appsCat = Category::create(['name' => 'Apps Premium', 'slug' => 'apps-premium', 'is_active' => true]);
+        $appProduct = Product::create([
+            'category_id' => $appsCat->id,
+            'name' => 'Netflix Premium',
+            'slug' => 'netflix-premium',
+            'is_active' => true,
+        ]);
+        ProductItem::create([
+            'product_id' => $appProduct->id,
+            'name' => '1 Bulan',
+            'buy_price' => '20000',
+            'sell_price' => '30000',
+            'is_active' => true,
+        ]);
+
+        $response = $this->get('/');
+
+        $response->assertStatus(200);
+        $response->assertSee('Apps Premium');
+        $response->assertSee('Netflix Premium');
+        $response->assertSee('Rp 30.000');
     }
 
     public function test_category_page_renders_products(): void
@@ -112,11 +139,13 @@ class FrontendRenderTest extends TestCase
         [$category, $product, $item, $banner, $channel] = $this->seedFrontendFixture();
 
         $gateway = $this->mock(PaymentGatewayInterface::class);
-        $gateway->shouldReceive('gatewayName')->andReturn('tripay');
-        $gateway->shouldReceive('createTransaction')->once()->andReturn([
-            'reference' => 'TRIPAY-REF-002',
-            'checkout_url' => 'https://tripay.example/pay/2',
-        ]);
+        $gateway->shouldReceive('gatewayName')->andReturn('belibayar');
+        $gateway->shouldReceive('createTransaction')->once()->andReturnUsing(function ($transaction) { return [
+            'reference' => $transaction->invoice_id,
+            'transaction_id' => 'byrtrx_render', 'payment_channel' => 'QRIS',
+            'amount' => (int) $transaction->total, 'status' => 'pending',
+            'qr_url' => 'https://link.belibayar.id/test.png', 'expired_at' => now()->addHour()->timestamp,
+        ]; });
         $this->app->instance(PaymentGatewayInterface::class, $gateway);
 
         $response = $this->post('/order', [
@@ -134,7 +163,7 @@ class FrontendRenderTest extends TestCase
 
         $this->assertNotNull($transaction);
         $response->assertRedirect(route('invoice.show', $transaction->invoice_id));
-        $this->assertSame('TRIPAY-REF-002', $transaction->payment_ref);
+        $this->assertSame('byrtrx_render', $transaction->payment_ref);
         $this->assertSame('12000.00', $transaction->amount); // flash sale price
     }
 
@@ -171,7 +200,8 @@ class FrontendRenderTest extends TestCase
             'profit' => '-1000',
             'payment_method' => 'QRIS',
             'payment_channel' => 'QRIS',
-            'payment_url' => 'https://tripay.example/pay/2',
+            'payment_gateway' => 'belibayar',
+            'payment_url' => 'https://link.belibayar.id/test.png',
             'status' => 'pending',
         ]);
 

@@ -26,7 +26,7 @@
                 @forelse ($categories as $category)
                     <tr class="border-b border-slate-800/60 last:border-0">
                         <td class="p-3 font-medium text-slate-200">
-                            {{ $category->icon }} {{ $category->name }}
+                            {{ $category->name }}
                         </td>
                         <td class="p-3 text-slate-400">{{ $category->slug }}</td>
                         <td class="p-3 text-slate-400">{{ $category->parent?->name ?? '—' }}</td>

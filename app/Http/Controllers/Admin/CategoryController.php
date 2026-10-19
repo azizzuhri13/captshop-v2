@@ -30,16 +30,25 @@ class CategoryController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $iconRule = $request->hasFile('icon')
+            ? ['image', 'mimes:jpeg,png,jpg,webp', 'max:2048']
+            : ['string', 'max:255'];
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'slug' => ['required', 'string', 'max:100', 'regex:/^[a-z0-9-]+$/', 'unique:categories,slug'],
             'parent_id' => ['nullable', 'exists:categories,id'],
-            'icon' => ['nullable', 'string', 'max:255'],
+            'icon' => ['nullable', ...$iconRule],
             'banner' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'is_active' => ['boolean'],
         ]);
+
+        if ($request->hasFile('icon')) {
+            $path = $request->file('icon')->store('categories', 'public');
+            $validated['icon'] = $path;
+        }
 
         $validated['is_active'] = $request->boolean('is_active');
 
@@ -61,11 +70,15 @@ class CategoryController extends Controller
 
     public function update(Request $request, Category $category): RedirectResponse
     {
+        $iconRule = $request->hasFile('icon')
+            ? ['image', 'mimes:jpeg,png,jpg,webp', 'max:2048']
+            : ['string', 'max:255'];
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'slug' => ['required', 'string', 'max:100', 'regex:/^[a-z0-9-]+$/', 'unique:categories,slug,'.$category->id],
             'parent_id' => ['nullable', 'exists:categories,id'],
-            'icon' => ['nullable', 'string', 'max:255'],
+            'icon' => ['nullable', ...$iconRule],
             'banner' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
@@ -74,6 +87,18 @@ class CategoryController extends Controller
 
         if ((int) ($validated['parent_id'] ?? 0) === $category->id) {
             return back()->withErrors(['parent_id' => 'Kategori tidak bisa menjadi induk dirinya sendiri.']);
+        }
+
+        if ($request->hasFile('icon')) {
+            // Delete old icon if it's a local storage file
+            if ($category->icon && ! str_starts_with($category->icon, 'http')) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($category->icon);
+            }
+            $path = $request->file('icon')->store('categories', 'public');
+            $validated['icon'] = $path;
+        } else {
+            // Unset icon from validated to prevent overwriting with null if no new file is uploaded
+            unset($validated['icon']);
         }
 
         $validated['is_active'] = $request->boolean('is_active');

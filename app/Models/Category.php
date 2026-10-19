@@ -30,6 +30,16 @@ class Category extends Model
         ];
     }
 
+    public function setSlugAttribute($value): void
+    {
+        $clean = trim((string) $value);
+        if (str_contains($clean, '/') || str_starts_with($clean, 'http')) {
+            $path = parse_url($clean, PHP_URL_PATH) ?? $clean;
+            $clean = basename(rtrim((string) $path, '/'));
+        }
+        $this->attributes['slug'] = \Illuminate\Support\Str::slug($clean);
+    }
+
     public function parent(): BelongsTo
     {
         return $this->belongsTo(self::class, 'parent_id');

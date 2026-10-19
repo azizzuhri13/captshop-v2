@@ -8,9 +8,11 @@
         {{-- Info utama --}}
         <div class="space-y-4 lg:col-span-2">
             <div class="rounded-xl border border-slate-800 bg-slate-800/40 p-5">
-                <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-                    <h2 class="font-heading text-lg font-bold text-slate-100">{{ $transaction->invoice_id }}</h2>
-                    <span class="rounded-full px-3 py-1 text-xs font-semibold {{ $transaction->statusBadgeClass() }}">{{ strtoupper($transaction->status) }}</span>
+                <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <h2 class="break-all font-heading text-base font-bold text-slate-100 sm:text-lg">{{ $transaction->invoice_id }}</h2>
+                    <div>
+                        <span class="inline-block rounded-full px-3 py-1 text-xs font-semibold {{ $transaction->statusBadgeClass() }}">{{ strtoupper($transaction->status) }}</span>
+                    </div>
                 </div>
 
                 <dl class="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
@@ -61,7 +63,7 @@
                     </div>
                     <div>
                         <p class="text-slate-500">Profit</p>
-                        <p class="mt-0.5 font-semibold text-primary-light">Rp {{ number_format((float) $transaction->profit, 0, ',', '.') }}</p>
+                        <p class="mt-0.5 font-semibold text-emerald-400">Rp {{ number_format((float) $transaction->profit, 0, ',', '.') }}</p>
                     </div>
                 </div>
             </div>
@@ -72,14 +74,14 @@
 
                 <ol class="space-y-3 text-sm">
                     @foreach ([
-                        ['Dibuat', $transaction->created_at],
-                        ['Dibayar', $transaction->paid_at],
-                        ['Diproses', $transaction->processed_at],
-                        ['Selesai', $transaction->completed_at],
-                        ['Hangus', $transaction->expired_at],
-                    ] as [$label, $time])
+                        ['Dibuat', $transaction->created_at, 'emerald'],
+                        ['Dibayar', $transaction->paid_at, 'emerald'],
+                        ['Diproses', $transaction->processed_at, 'sky'],
+                        ['Selesai', $transaction->completed_at, 'emerald'],
+                        ['Hangus', $transaction->expired_at, 'slate'],
+                    ] as [$label, $time, $color])
                         <li class="flex items-center gap-3">
-                            <span class="h-2 w-2 shrink-0 rounded-full {{ $time ? 'bg-primary' : 'bg-slate-700' }}"></span>
+                            <span class="h-2 w-2 shrink-0 rounded-full {{ $time ? ($color === 'sky' ? 'bg-sky-400' : ($color === 'slate' ? 'bg-red-500' : 'bg-emerald-400')) : 'bg-slate-700' }}"></span>
                             <span class="text-slate-400">{{ $label }}</span>
                             <span class="ml-auto text-xs {{ $time ? 'text-slate-300' : 'text-slate-600' }}">{{ $time?->format('d M Y, H:i') ?? '—' }}</span>
                         </li>
@@ -89,6 +91,10 @@
 
             {{-- Supplier response --}}
             @if ($transaction->supplier_response)
+                @php
+                    $decoded = json_decode($transaction->supplier_response, true);
+                    $prettyJson = is_array($decoded) ? json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) : $transaction->supplier_response;
+                @endphp
                 <div class="rounded-xl border border-slate-800 bg-slate-800/40 p-5">
                     <h3 class="mb-3 font-heading text-sm font-bold text-slate-200">Response Supplier</h3>
                     <dl class="space-y-2 text-sm">
@@ -103,7 +109,7 @@
                     </dl>
                     <details class="mt-2">
                         <summary class="cursor-pointer text-xs font-medium text-primary-light">Raw response</summary>
-                        <pre class="mt-2 max-h-56 overflow-auto rounded-lg bg-slate-950 p-3 text-[11px] text-slate-400">{{ $transaction->supplier_response }}</pre>
+                        <pre class="mt-2 max-h-56 overflow-auto rounded-lg bg-slate-950 p-3 text-[11px] leading-relaxed text-slate-300">{{ $prettyJson }}</pre>
                     </details>
                 </div>
             @endif
