@@ -60,14 +60,21 @@ class NetflixFulfillmentTest extends TestCase
         $this->assertEquals('sold', $account->status);
         $this->assertEquals($trx->id, $account->transaction_id);
 
-        // Test invoice view renders Netflix Card
-        $response = $this->get(route('invoice.show', $trx->invoice_id));
-        $response->assertStatus(200);
-        $response->assertSee('test.stock@captshop.id');
-        $response->assertSee('SecretPass123');
-        $response->assertSee('PROFIL 2');
-        $response->assertSee('9999');
-        $response->assertSee('Buka Netflix');
+        // Test invoice view publik (tanpa signature): kredensial terkunci
+        $publicResponse = $this->get(route('invoice.show', $trx->invoice_id));
+        $publicResponse->assertStatus(200);
+        $publicResponse->assertSee('Kredensial Akun Dikunci');
+        $publicResponse->assertDontSee('SecretPass123');
+
+        // Test invoice view via tautan resmi bertanda tangan (signed URL)
+        $signedUrl = \Illuminate\Support\Facades\URL::signedRoute('invoice.show', ['invoiceId' => $trx->invoice_id]);
+        $signedResponse = $this->get($signedUrl);
+        $signedResponse->assertStatus(200);
+        $signedResponse->assertSee('test.stock@captshop.id');
+        $signedResponse->assertSee('SecretPass123');
+        $signedResponse->assertSee('PROFIL 2');
+        $signedResponse->assertSee('9999');
+        $signedResponse->assertSee('Buka Netflix');
     }
 
     public function test_invoice_shows_whatsapp_button_when_netflix_stock_empty(): void

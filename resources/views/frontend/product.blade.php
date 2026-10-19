@@ -97,6 +97,12 @@
             gameSlug: '{{ $product->slug }}',
             checkNicknameUrl: '{{ route('game.check-nickname') }}',
             isGameAccount: {{ app(\App\Services\GameValidator\GameValidatorInterface::class)->isSupported($product->slug) ? 'true' : 'false' }},
+            itemId: {{ Js::from(old('product_item_id')) }},
+            paymentChannel: {{ Js::from(old('payment_channel')) }},
+            customerData: {{ Js::from(old('customer_data', [])) }},
+            customer_phone: {{ Js::from(old('customer_phone', '')) }},
+            customer_email: {{ Js::from(old('customer_email', '')) }},
+            couponCode: {{ Js::from(old('coupon_code', '')) }},
         })"
          class="space-y-6"
     >
@@ -340,6 +346,10 @@
                 </div>
 
                 <input type="hidden" name="coupon_code" :value="coupon ? coupon.code : ''">
+
+                <p x-show="! canSubmit" x-cloak class="mb-2 text-center text-xs text-amber-400/90">
+                    Pilih <span x-text="missingHint"></span> terlebih dahulu.
+                </p>
 
                 <button type="submit" class="btn-primary w-full text-base" :disabled="! canSubmit || processing" x-text="processing ? 'Memproses...' : '🛒 BELI SEKARANG'">
                     🛒 BELI SEKARANG

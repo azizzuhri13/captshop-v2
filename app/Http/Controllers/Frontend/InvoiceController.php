@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Transaction;
 use App\Services\Payment\BelibayarService;
 use App\Services\FulfillmentService;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class InvoiceController extends Controller
@@ -17,9 +18,11 @@ class InvoiceController extends Controller
 
     /**
      * Halaman invoice: detail pesanan + instruksi pembayaran.
-     * Akses publik via invoice ID (tanpa login, sesuai konsep guest checkout).
+     * Akses publik via invoice ID (tanpa login, sesuai konsep guest checkout),
+     * tetapi kredensial akun hanya tampil lewat tautan bertanda tangan resmi
+     * (yang dikirim ke WhatsApp/email pembeli).
      */
-    public function show(string $invoiceId): View
+    public function show(Request $request, string $invoiceId): View
     {
         $transaction = Transaction::query()
             ->where('invoice_id', $invoiceId)
@@ -30,7 +33,16 @@ class InvoiceController extends Controller
             $transaction->forceFill(['status' => 'expired'])->save();
         }
 
-        return view('frontend.invoice', compact('transaction'));
+        $canViewCredentials = $request->hasValidSignature()
+            || session('order_placed_'.$invoiceId) === true
+            || (\Illuminate\Support\Facades\Auth::guard('web')->check()
+                && \Illuminate\Support\Facades\Auth::guard('web')->user()->email
+                && \Illuminate\Support\Facades\Auth::guard('web')->user()->email === $transaction->customer_email);
+
+        return view('frontend.invoice', [
+            'transaction' => $transaction,
+            'canViewCredentials' => $canViewCredentials,
+        ]);
     }
 
     /**

@@ -162,4 +162,75 @@ class DigiflazzWebhookTest extends TestCase
             'status' => 'failed',
         ]);
     }
+
+    public function test_unconfigured_secret_rejects_webhook(): void
+    {
+        config(['supplier.digiflazz.webhook_secret' => null]);
+
+        $response = $this->call(
+            'POST',
+            '/webhook/digiflazz',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json'],
+            json_encode(['data' => ['ref_id' => 'INV-TEST-DF01', 'status' => 'Sukses']])
+        );
+
+        $response->assertStatus(403);
+    }
+
+    public function test_unpaid_transaction_is_not_completed_by_webhook(): void
+    {
+        $trx = $this->createPendingTransaction('INV-DF-UNPAID');
+        $trx->update(['status' => 'pending']); // Belum dibayar
+
+        $secret = 'test-secret';
+        config(['supplier.digiflazz.webhook_secret' => $secret]);
+
+        $body = ['data' => ['ref_id' => 'INV-DF-UNPAID', 'status' => 'Sukses', 'sn' => 'SN999']];
+        $raw = json_encode($body);
+        $sig = 'sha1='.hash_hmac('sha1', $raw, $secret);
+
+        $response = $this->call(
+            'POST',
+            '/webhook/digiflazz',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json', 'HTTP_X_HUB_SIGNATURE' => $sig],
+            $raw
+        );
+
+        $response->assertOk();
+        $this->assertEquals('pending', $trx->fresh()->status);
+        $this->assertNull($trx->fresh()->supplier_sn);
+    }
+
+    public function test_manual_product_transaction_is_not_modified_by_digiflazz_webhook(): void
+    {
+        $trx = $this->createPendingTransaction('INV-DF-MANUAL');
+        $trx->productItem->product->update(['supplier_type' => 'manual']);
+
+        $secret = 'test-secret';
+        config(['supplier.digiflazz.webhook_secret' => $secret]);
+
+        $body = ['data' => ['ref_id' => 'INV-DF-MANUAL', 'status' => 'Sukses', 'sn' => 'SN-MANUAL']];
+        $raw = json_encode($body);
+        $sig = 'sha1='.hash_hmac('sha1', $raw, $secret);
+
+        $response = $this->call(
+            'POST',
+            '/webhook/digiflazz',
+            [],
+            [],
+            [],
+            ['CONTENT_TYPE' => 'application/json', 'HTTP_X_HUB_SIGNATURE' => $sig],
+            $raw
+        );
+
+        $response->assertOk();
+        $this->assertEquals('processing', $trx->fresh()->status);
+        $this->assertNull($trx->fresh()->supplier_sn);
+    }
 }

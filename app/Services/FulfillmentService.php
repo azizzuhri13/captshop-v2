@@ -49,7 +49,28 @@ class FulfillmentService
         }
 
         if ($supplierType === 'manual') {
-            return $this->fulfillNetflixStock($transaction);
+            // Produk manual (CapCut, Viu, Wukong, dsb) tidak boleh dialokasikan stok Netflix.
+            // Status tetap processing untuk penanganan manual admin.
+            $transaction->forceFill([
+                'status' => 'processing',
+                'supplier_ref' => 'MANUAL-'.$transaction->invoice_id,
+                'supplier_response' => json_encode(['note' => 'Menunggu proses manual admin']),
+            ])->save();
+
+            try {
+                $productName = $transaction->productItem?->product?->name ?? 'Produk';
+                $itemName = $transaction->productItem?->name ?? '';
+                app(\App\Services\Notification\TelegramAlertService::class)->send(
+                    "📌 <b>[PESANAN MANUAL MEMERLUKAN PROSES]</b>\n"
+                    ."Platform: <b>".(\App\Models\SiteSetting::get('site_name') ?? 'CAPTSHOP')."</b>\n"
+                    ."Invoice: <code>{$transaction->invoice_id}</code>\n"
+                    ."Produk: <b>{$productName} — {$itemName}</b>\n"
+                    ."Customer: {$transaction->customer_phone}\n"
+                    ."Waktu: ".now()->format('d/m/Y H:i:s')." WIB"
+                );
+            } catch (\Throwable) {}
+
+            return $transaction;
         }
 
         try {

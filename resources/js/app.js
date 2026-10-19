@@ -37,18 +37,19 @@ Alpine.data('carousel', (slideCount, interval = 5000) => ({
 
 // Component: form order single-page checkout (step 1-4 + ringkasan + kupon).
 Alpine.data('orderForm', (config) => ({
-    itemId: null,
-    paymentChannel: null,
-    customerData: {},
-    form: {
-        customer_phone: '',
-        customer_email: '',
-    },
-    fields: config.fields || [],
     items: config.items || [],
+    fields: config.fields || [],
     channels: config.channels || [],
+    // Nilai dari submit sebelumnya (old()) dipulihkan agar user tidak mengisi ulang.
+    itemId: config.itemId != null ? Number(config.itemId) : null,
+    paymentChannel: config.paymentChannel || null,
+    customerData: config.customerData || {},
+    form: {
+        customer_phone: config.customer_phone || '',
+        customer_email: config.customer_email || '',
+    },
     couponCheckUrl: config.couponCheckUrl || '',
-    couponCode: '',
+    couponCode: config.couponCode || '',
     coupon: null,
     couponChecking: false,
     couponError: '',
@@ -72,6 +73,12 @@ Alpine.data('orderForm', (config) => ({
 
         if (config.isGameAccount && config.checkNicknameUrl) {
             this.$watch('customerData', () => this.debouncedCheckNickname(), { deep: true });
+        }
+
+        // Kupon dari submit sebelumnya divalidasi ulang ke server: harga/diskon
+        // yang tampil harus sama dengan yang nanti ditagih.
+        if (this.couponCode && this.selectedItem) {
+            this.applyCoupon();
         }
     },
 
@@ -140,6 +147,27 @@ Alpine.data('orderForm', (config) => ({
 
     get canSubmit() {
         return Boolean(this.itemId && this.paymentChannel && this.form.customer_phone);
+    },
+
+    /**
+     * Daftar isian yang belum lengkap — dipakai sebagai petunjuk di atas tombol beli.
+     */
+    get missingHint() {
+        const missing = [];
+
+        if (! this.itemId) {
+            missing.push('nominal');
+        }
+
+        if (! this.paymentChannel) {
+            missing.push('metode pembayaran');
+        }
+
+        if (! this.form.customer_phone) {
+            missing.push('No. WhatsApp');
+        }
+
+        return missing.join(' / ');
     },
 
     async applyCoupon() {

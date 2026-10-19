@@ -55,6 +55,11 @@ class TrackAndPagesTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertSee($transaction->invoice_id);
+
+        // Akses invoice dari hasil pencarian publik tidak boleh membuka kredensial
+        $invoiceResponse = $this->get(route('invoice.show', $transaction->invoice_id));
+        $invoiceResponse->assertStatus(200);
+        $invoiceResponse->assertDontSee('SecretPass123');
     }
 
     public function test_track_prefix_does_not_enumerate_invoices(): void

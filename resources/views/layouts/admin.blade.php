@@ -145,7 +145,7 @@
 <div class="flex min-h-screen">
     {{-- Sidebar --}}
     <aside
-        class="fixed inset-y-0 left-0 z-50 w-64 transform border-r border-slate-800 bg-slate-950 shadow-2xl transition-transform duration-200 lg:static lg:translate-x-0"
+        class="fixed inset-y-0 left-0 z-50 w-64 transform border-r border-slate-800 bg-slate-950 shadow-2xl transition-transform duration-200 lg:static lg:relative lg:translate-x-0"
         :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
         :style="sidebarOpen ? 'transform: translateX(0) !important;' : ''"
         x-cloak

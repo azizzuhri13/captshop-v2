@@ -60,7 +60,7 @@ class WhatsAppService
             'Total: *Rp '.number_format((float) $transaction->total, 0, ',', '.').'*',
             '',
             'Silakan selesaikan pembayaran sebelum '.$transaction->expired_at?->format('d M Y H:i').' WIB.',
-            'Cek status: '.url('/cek-transaksi'),
+            'Detail invoice: '.\Illuminate\Support\Facades\URL::signedRoute('invoice.show', ['invoiceId' => $transaction->invoice_id]),
         ]);
 
         return $this->send($transaction->customer_phone, $message);
@@ -95,6 +95,7 @@ class WhatsAppService
             'Pesanan *'.$transaction->invoice_id.'* telah berhasil diproses. 🎉',
             'Item: '.$transaction->productItem?->name,
             $transaction->supplier_sn ? 'SN: '.$transaction->supplier_sn : null,
+            'Detail pesanan & kredensial: '.\Illuminate\Support\Facades\URL::signedRoute('invoice.show', ['invoiceId' => $transaction->invoice_id]),
             '',
             'Terima kasih sudah berbelanja di '.(SiteSetting::get('site_name') ?? 'CAPTSHOP').'!',
         ]);

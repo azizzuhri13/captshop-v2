@@ -8,6 +8,7 @@ use App\Services\Notification\NotificationService;
 use App\Services\OrderService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\URL;
 
 class OrderController extends Controller
 {
@@ -31,17 +32,20 @@ class OrderController extends Controller
             $transaction = $this->orders->place($data);
         } catch (\InvalidArgumentException $e) {
             return back()
-                ->withInput($request->only(['customer_phone', 'customer_email']))
+                ->withInput()
                 ->withErrors(['order' => $e->getMessage()]);
         } catch (\Throwable $e) {
             Log::error('Gagal memproses pesanan: '.$e->getMessage());
 
             return back()
-                ->withInput($request->only(['customer_phone', 'customer_email']))
+                ->withInput()
                 ->withErrors(['order' => 'Terjadi kesalahan saat memproses pesanan. Silakan coba lagi.']);
         }
 
         $this->notifications->orderCreated($transaction);
+
+        // Tandai di session browser pemesan agar dapat melihat kredensial akun
+        session()->put('order_placed_'.$transaction->invoice_id, true);
 
         return redirect()
             ->route('invoice.show', $transaction->invoice_id)

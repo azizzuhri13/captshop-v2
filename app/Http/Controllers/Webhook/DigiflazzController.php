@@ -26,17 +26,21 @@ class DigiflazzController extends Controller
 
         $secret = (string) Credentials::get('digiflazz_webhook_secret', config('supplier.digiflazz.webhook_secret'));
 
-        if ($secret !== '') {
-            $expected = 'sha1='.hash_hmac('sha1', $request->getContent(), $secret);
-            $signature = (string) $request->header('X-Hub-Signature', '');
+        if ($secret === '') {
+            Log::error('DigiFlazz webhook secret belum dikonfigurasi.');
 
-            if (! hash_equals($expected, $signature)) {
-                Log::warning('DigiFlazz webhook unauthorized signature mismatch', [
-                    'ip' => $request->ip(),
-                ]);
+            return response()->json(['status' => 'unauthorized'], 403);
+        }
 
-                return response()->json(['status' => 'unauthorized'], 403);
-            }
+        $expected = 'sha1='.hash_hmac('sha1', $request->getContent(), $secret);
+        $signature = (string) $request->header('X-Hub-Signature', '');
+
+        if (! hash_equals($expected, $signature)) {
+            Log::warning('DigiFlazz webhook unauthorized signature mismatch', [
+                'ip' => $request->ip(),
+            ]);
+
+            return response()->json(['status' => 'unauthorized'], 403);
         }
 
         $payload = $request->json()->all();
@@ -49,7 +53,6 @@ class DigiflazzController extends Controller
 
         $statusStr = strtolower((string) ($data['status'] ?? ''));
         $sn = (string) ($data['sn'] ?? '');
-        $message = (string) ($data['message'] ?? '');
 
         $transaction = null;
 
@@ -57,6 +60,22 @@ class DigiflazzController extends Controller
             $trx = Transaction::query()->where('invoice_id', $refId)->lockForUpdate()->first();
 
             if (! $trx) {
+                return;
+            }
+
+            // Tolak jika produk bukan dikelola oleh supplier DigiFlazz
+            $supplierType = strtolower((string) ($trx->productItem?->product?->supplier_type ?? ''));
+            if ($supplierType !== '' && $supplierType !== 'digiflazz') {
+                return;
+            }
+
+            // Idempoten: jika transaksi sudah selesai, abaikan
+            if ($trx->status === 'completed') {
+                return;
+            }
+
+            // Pesanan belum dibayar tidak boleh diselesaikan oleh webhook supplier
+            if (! in_array($trx->status, ['processing', 'paid'], true)) {
                 return;
             }
 
@@ -72,6 +91,17 @@ class DigiflazzController extends Controller
             } elseif ($statusStr === 'gagal' || $statusStr === 'failed') {
                 $trx->forceFill([
                     'status' => 'failed',
+                    'supplier_response' => json_encode($data),
+                ])->save();
+
+                try {
+                    app(\App\Services\Notification\TelegramAlertService::class)->alertFulfillmentFailed(
+                        $trx,
+                        $data['message'] ?? 'Fulfillment gagal dari DigiFlazz'
+                    );
+                } catch (\Throwable) {}
+            } else {
+                $trx->forceFill([
                     'supplier_response' => json_encode($data),
                 ])->save();
             }

@@ -83,7 +83,7 @@
                     {{-- CTA --}}
                     <tr>
                         <td style="padding:24px 32px;" align="center">
-                            <a href="{{ $transaction->payment_url ?: url('/invoice/'.$transaction->invoice_id) }}"
+                            <a href="{{ $transaction->payment_url ?: \Illuminate\Support\Facades\URL::signedRoute('invoice.show', ['invoiceId' => $transaction->invoice_id]) }}"
                                style="display:inline-block;background-color:#D92525;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:12px 32px;border-radius:8px;">
                                 {{ $transaction->payment_url ? 'Bayar Sekarang' : 'Lihat Instruksi Pembayaran' }}
                             </a>

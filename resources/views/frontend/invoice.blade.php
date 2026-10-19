@@ -67,7 +67,26 @@
         @endphp
 
         @if ($isStreaming && $streamingData && in_array($transaction->status, ['completed']))
-            <section class="overflow-hidden rounded-2xl border-2 {{ $cardBorder }} bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 p-5 shadow-2xl relative" x-data="{ copiedEmail: false, copiedPass: false }">
+            @if (! $canViewCredentials)
+                {{-- Kredensial akun tidak ditampilkan pada URL invoice publik (tebakan). --}}
+                <section class="rounded-2xl border-2 border-slate-700 bg-gradient-to-b from-slate-900 to-slate-950 p-6 text-center shadow-xl">
+                    <div class="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-slate-700 bg-slate-800 text-2xl">🔒</div>
+                    <h2 class="mt-3 font-heading text-base font-bold text-slate-100">Kredensial Akun Dikunci</h2>
+                    <p class="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-slate-400">
+                        Buka tautan invoice resmi yang dikirimkan ke WhatsApp/Email Anda untuk melihat detail akun.
+                    </p>
+                </section>
+            @else
+            <section class="overflow-hidden rounded-2xl border-2 {{ $cardBorder }} bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 p-5 shadow-2xl relative" x-data="{
+                copied: '',
+                creds: {{ Js::from(['email' => $streamingData['email'] ?? '', 'password' => $streamingData['password'] ?? '']) }},
+                copy(value, key) {
+                    navigator.clipboard.writeText(value).then(() => {
+                        this.copied = key;
+                        setTimeout(() => { if (this.copied === key) { this.copied = ''; } }, 2000);
+                    }).catch(() => {});
+                }
+            }">
                 <div class="absolute -right-12 -top-12 h-32 w-32 rounded-full {{ $glowBg }} blur-2xl pointer-events-none"></div>
 
                 {{-- Header Card --}}
@@ -92,10 +111,10 @@
                     <div class="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
                         <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Email / ID Akun</span>
                         <div class="flex items-center justify-between gap-2">
-                            <code class="font-mono text-sm font-semibold text-slate-100 select-all">{{ $streamingData['email'] ?? '-' }}</code>
-                            <button type="button" @click="navigator.clipboard.writeText('{{ $streamingData['email'] ?? '' }}'); copiedEmail = true; setTimeout(() => copiedEmail = false, 2000)" class="flex items-center gap-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition">
-                                <span x-show="!copiedEmail">📋 Salin</span>
-                                <span x-show="copiedEmail" class="text-emerald-400 font-bold" style="display: none;">✓ Tersalin</span>
+                            <code class="font-mono text-sm font-semibold text-slate-100 select-all min-w-0 flex-1 break-all">{{ $streamingData['email'] ?? '-' }}</code>
+                            <button type="button" @click="copy(creds.email, 'email')" class="flex shrink-0 items-center gap-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition">
+                                <span x-show="copied !== 'email'">📋 Salin</span>
+                                <span x-show="copied === 'email'" x-cloak class="text-emerald-400 font-bold">✓ Tersalin</span>
                             </button>
                         </div>
                     </div>
@@ -104,10 +123,10 @@
                     <div class="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
                         <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Password</span>
                         <div class="flex items-center justify-between gap-2">
-                            <code class="font-mono text-sm font-semibold text-slate-100 select-all">{{ $streamingData['password'] ?? '-' }}</code>
-                            <button type="button" @click="navigator.clipboard.writeText('{{ $streamingData['password'] ?? '' }}'); copiedPass = true; setTimeout(() => copiedPass = false, 2000)" class="flex items-center gap-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition">
-                                <span x-show="!copiedPass">📋 Salin</span>
-                                <span x-show="copiedPass" class="text-emerald-400 font-bold" style="display: none;">✓ Tersalin</span>
+                            <code class="font-mono text-sm font-semibold text-slate-100 select-all min-w-0 flex-1 break-all">{{ $streamingData['password'] ?? '-' }}</code>
+                            <button type="button" @click="copy(creds.password, 'password')" class="flex shrink-0 items-center gap-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition">
+                                <span x-show="copied !== 'password'">📋 Salin</span>
+                                <span x-show="copied === 'password'" x-cloak class="text-emerald-400 font-bold">✓ Tersalin</span>
                             </button>
                         </div>
                     </div>
@@ -115,13 +134,13 @@
                     {{-- Profile & PIN (Jika ada) --}}
                     @if (!empty($streamingData['profile']) || !empty($streamingData['pin']))
                         <div class="grid grid-cols-2 gap-3">
-                            <div class="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+                            <div class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 min-w-0 break-all">
                                 <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Profil Khusus</span>
-                                <p class="font-mono text-sm font-bold text-amber-400">{{ $streamingData['profile'] ?? 'Profil Bebas' }}</p>
+                                <p class="font-mono text-sm font-bold text-amber-400 min-w-0 break-all">{{ $streamingData['profile'] ?? 'Profil Bebas' }}</p>
                             </div>
-                            <div class="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+                            <div class="rounded-xl border border-slate-800 bg-slate-950/80 p-3 min-w-0 break-all">
                                 <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">PIN Profil</span>
-                                <p class="font-mono text-sm font-bold text-amber-400">{{ $streamingData['pin'] ?? 'Tanpa PIN' }}</p>
+                                <p class="font-mono text-sm font-bold text-amber-400 min-w-0 break-all">{{ $streamingData['pin'] ?? 'Tanpa PIN' }}</p>
                             </div>
                         </div>
                     @endif
@@ -162,6 +181,7 @@
                     </ul>
                 </div>
             </section>
+            @endif
         @endif
 
         {{-- Kotak Peringatan Stok Habis & Hubungi Admin WhatsApp jika status processing/paid dan akun belum dialokasikan --}}
@@ -372,7 +392,7 @@
                 </div>
             </dl>
 
-            @if ($transaction->supplier_sn && in_array($transaction->status, ['completed']))
+            @if ($transaction->supplier_sn && in_array($transaction->status, ['completed']) && (! $isStreaming || $canViewCredentials))
                 <div class="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
                     <p class="text-xs font-semibold text-emerald-400">SN / Bukti Transaksi</p>
                     <p class="mt-1 break-all font-mono text-sm text-emerald-300">{{ $transaction->supplier_sn }}</p>
