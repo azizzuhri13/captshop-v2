@@ -106,73 +106,74 @@
         })"
          class="space-y-6"
     >
-        {{-- Hero Banner Cover & Overlap Header (Ourastore Full Fidelity) --}}
-        <div class="-mx-4 -mt-6 sm:mx-0 sm:mt-0">
-            @if ($product->bannerUrl())
-                <div class="relative w-full aspect-[16/9] sm:aspect-[21/9] overflow-hidden sm:rounded-2xl border-b sm:border border-slate-800 bg-slate-900 shadow-xl">
-                    <img src="{{ $product->bannerUrl() }}" alt="{{ $product->name }}" class="w-full h-full object-cover">
-                    <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent"></div>
-                    <div class="absolute top-3 left-3 bg-red-600/90 backdrop-blur-md border border-red-500/50 text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1.5">
-                        <svg class="w-3 h-3 fill-current text-amber-300" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                        <span>PROSES KILAT 1-3 DETIK</span>
-                    </div>
+        {{-- Hero Banner Cover (Target Reference Style) --}}
+        @if ($product->bannerUrl())
+            <div class="relative w-full aspect-[16/9] sm:aspect-[21/9] overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
+                <img src="{{ $product->bannerUrl() }}" alt="{{ $product->name }}" class="w-full h-full object-cover">
+                <div class="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent"></div>
+                <div class="absolute top-3 left-3 bg-red-600/90 backdrop-blur-md border border-red-500/50 text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1.5">
+                    <svg class="w-3 h-3 fill-current text-amber-300" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    <span>PROSES KILAT 1-3 DETIK</span>
                 </div>
-            @endif
+            </div>
+        @endif
 
-            {{-- Header Identitas (Menimpa Banner) --}}
-            <div class="{{ $product->bannerUrl() ? '-mt-10 sm:-mt-12' : 'pt-4' }} px-4 sm:px-0 relative z-20">
-                <div class="flex items-end gap-3.5">
-                    <div class="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border-2 border-slate-700 bg-slate-950 shadow-2xl ring-4 ring-slate-950/60">
-                        @if ($product->iconUrl())
-                            <img src="{{ $product->iconUrl() }}" alt="{{ $product->name }}" class="h-full w-full object-cover">
-                        @else
-                            <span class="font-heading text-xl font-bold text-slate-600">{{ strtoupper(substr($product->name, 0, 2)) }}</span>
-                        @endif
-                    </div>
-                    <div class="pb-1 min-w-0 flex-1">
-                        <div class="mb-1 flex items-center gap-1.5 text-xs">
-                            <span class="text-[10px] font-bold text-red-500 uppercase tracking-wider">{{ strtoupper($product->category->name ?? 'GAMES') }}</span>
-                            <span class="text-slate-600">•</span>
-                            <span class="text-[10px] font-semibold text-emerald-400 flex items-center gap-0.5">
-                                <svg class="w-3 h-3 fill-current inline" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                                Official
-                            </span>
-                        </div>
-                        @php
-                            $publisher = match($product->slug) {
-                                'mobile-legends', 'magic-chess-go-go' => 'Moonton',
-                                'free-fire', 'free-fire-max' => 'Garena',
-                                'pubg-mobile' => 'Tencent',
-                                'genshin-impact', 'honkai-star-rail', 'zenless-zone-zero' => 'HoYoverse',
-                                'valorant' => 'Riot Games',
-                                'roblox' => 'Roblox Corp',
-                                'call-of-duty-mobile' => 'Activision',
-                                'point-blank' => 'Zepetto',
-                                'netflix-premium' => 'Netflix',
-                                'disney-plus' => 'Disney',
-                                'canva-pro' => 'Canva',
-                                default => $product->category->name ?? 'CAPTSHOP'
-                            };
-                        @endphp
-                        <h1 class="font-heading text-xl sm:text-2xl font-black text-slate-100 leading-tight truncate">{{ $product->name }}</h1>
-                        <p class="text-xs text-slate-400 font-medium truncate">{{ $publisher }} • Top Up Instan 24/7</p>
-                    </div>
+        {{-- Header Identitas --}}
+        <div class="relative z-20 space-y-4">
+            <div class="flex items-start gap-3.5">
+                {{-- Hanya icon yang naik menimpa banner --}}
+                <div class="{{ $product->bannerUrl() ? '-mt-10 sm:-mt-12' : '' }} grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border-2 border-slate-700 bg-slate-950 shadow-2xl ring-4 ring-slate-950/60">
+                    @if ($product->iconUrl())
+                        <img src="{{ $product->iconUrl() }}" alt="{{ $product->name }}" class="h-full w-full object-cover">
+                    @else
+                        <span class="font-heading text-xl font-bold text-slate-600">{{ strtoupper(substr($product->name, 0, 2)) }}</span>
+                    @endif
                 </div>
 
-                {{-- Pita Trust Badges --}}
-                <div class="mt-3.5 grid grid-cols-3 gap-1.5 p-2 sm:p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[10px] sm:text-xs text-slate-300 font-medium text-center shadow-sm">
-                    <div class="flex items-center justify-center gap-1.5 text-amber-400">
-                        <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                        <span class="text-slate-200 font-semibold truncate">Proses Kilat</span>
+                {{-- Teks tetap di posisi bawah, sejajar samping icon --}}
+                <div class="pt-1 min-w-0 flex-1">
+                    <div class="mb-1 flex items-center gap-1.5 text-xs">
+                        <span class="text-[11px] font-bold text-rose-500 uppercase tracking-wider">GAMES</span>
+                        <span class="text-slate-600">•</span>
+                        <span class="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                            Official
+                        </span>
                     </div>
-                    <div class="flex items-center justify-center gap-1.5 text-sky-400 border-x border-slate-800">
-                        <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-                        <span class="text-slate-200 font-semibold truncate">CS 24 Jam</span>
-                    </div>
-                    <div class="flex items-center justify-center gap-1.5 text-emerald-400">
-                        <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                        <span class="text-slate-200 font-semibold truncate">100% Aman</span>
-                    </div>
+                    @php
+                        $publisher = match($product->slug) {
+                            'mobile-legends', 'magic-chess-go-go' => 'Moonton',
+                            'free-fire', 'free-fire-max' => 'Garena',
+                            'pubg-mobile' => 'Tencent',
+                            'genshin-impact', 'honkai-star-rail', 'zenless-zone-zero' => 'HoYoverse',
+                            'valorant' => 'Riot Games',
+                            'roblox' => 'Roblox Corp',
+                            'call-of-duty-mobile' => 'Activision',
+                            'point-blank' => 'Zepetto',
+                            'netflix-premium' => 'Netflix',
+                            'disney-plus' => 'Disney',
+                            'canva-pro' => 'Canva',
+                            default => $product->category->name ?? 'CAPTSHOP'
+                        };
+                    @endphp
+                    <h1 class="font-heading text-xl sm:text-2xl font-black text-slate-100 leading-tight truncate">{{ $product->name }}</h1>
+                    <p class="text-xs text-slate-400 font-medium truncate mt-0.5">{{ $publisher }} • Top Up Instan 24/7</p>
+                </div>
+            </div>
+
+            {{-- Pita Trust Badges --}}
+            <div class="grid grid-cols-3 gap-1.5 p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[10px] sm:text-xs text-slate-300 font-medium text-center shadow-sm">
+                <div class="flex items-center justify-center gap-1.5 text-amber-400">
+                    <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    <span class="text-slate-200 font-semibold truncate">Proses Kilat</span>
+                </div>
+                <div class="flex items-center justify-center gap-1.5 text-sky-400 border-x border-slate-800">
+                    <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                    <span class="text-slate-200 font-semibold truncate">CS 24 Jam</span>
+                </div>
+                <div class="flex items-center justify-center gap-1.5 text-emerald-400">
+                    <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                    <span class="text-slate-200 font-semibold truncate">100% Aman</span>
                 </div>
             </div>
         </div>
