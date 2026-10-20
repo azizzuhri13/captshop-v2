@@ -120,9 +120,9 @@
             @endif
 
             {{-- Header Identitas (Menimpa Banner) --}}
-            <div class="{{ $product->bannerUrl() ? '-mt-9 sm:-mt-11' : 'pt-4' }} px-4 sm:px-0 relative z-20">
+            <div class="{{ $product->bannerUrl() ? '-mt-10 sm:-mt-12' : 'pt-4' }} px-4 sm:px-0 relative z-20">
                 <div class="flex items-end gap-3.5">
-                    <div class="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border-2 border-slate-700 bg-slate-900 shadow-2xl">
+                    <div class="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border-2 border-slate-700 bg-slate-950 shadow-2xl ring-4 ring-slate-950/60">
                         @if ($product->iconUrl())
                             <img src="{{ $product->iconUrl() }}" alt="{{ $product->name }}" class="h-full w-full object-cover">
                         @else
@@ -130,18 +130,32 @@
                         @endif
                     </div>
                     <div class="pb-1 min-w-0 flex-1">
-                        <nav class="mb-1 flex items-center gap-1.5 text-xs text-slate-500" aria-label="Breadcrumb">
-                            <a href="{{ route('home') }}" class="hover:text-slate-300">Home</a>
-                            <span>/</span>
-                            <a href="{{ route('category.show', $product->category->slug) }}" class="hover:text-slate-300">{{ $product->category->name }}</a>
+                        <div class="mb-1 flex items-center gap-1.5 text-xs">
+                            <span class="text-[10px] font-bold text-red-500 uppercase tracking-wider">{{ strtoupper($product->category->name ?? 'GAMES') }}</span>
                             <span class="text-slate-600">•</span>
                             <span class="text-[10px] font-semibold text-emerald-400 flex items-center gap-0.5">
                                 <svg class="w-3 h-3 fill-current inline" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
                                 Official
                             </span>
-                        </nav>
+                        </div>
+                        @php
+                            $publisher = match($product->slug) {
+                                'mobile-legends', 'magic-chess-go-go' => 'Moonton',
+                                'free-fire', 'free-fire-max' => 'Garena',
+                                'pubg-mobile' => 'Tencent',
+                                'genshin-impact', 'honkai-star-rail', 'zenless-zone-zero' => 'HoYoverse',
+                                'valorant' => 'Riot Games',
+                                'roblox' => 'Roblox Corp',
+                                'call-of-duty-mobile' => 'Activision',
+                                'point-blank' => 'Zepetto',
+                                'netflix-premium' => 'Netflix',
+                                'disney-plus' => 'Disney',
+                                'canva-pro' => 'Canva',
+                                default => $product->category->name ?? 'CAPTSHOP'
+                            };
+                        @endphp
                         <h1 class="font-heading text-xl sm:text-2xl font-black text-slate-100 leading-tight truncate">{{ $product->name }}</h1>
-                        <p class="text-xs text-slate-400 font-medium truncate">Top Up Instan 24/7 Bergaransi Resmi</p>
+                        <p class="text-xs text-slate-400 font-medium truncate">{{ $publisher }} • Top Up Instan 24/7</p>
                     </div>
                 </div>
 
@@ -160,20 +174,6 @@
                         <span class="text-slate-200 font-semibold truncate">100% Aman</span>
                     </div>
                 </div>
-
-                {{-- Deskripsi Collapsible --}}
-                @if ($product->description)
-                    <div x-data="{ open: false }" class="mt-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs">
-                        <button type="button" @click="open = !open" class="flex w-full items-center justify-between font-semibold text-slate-300">
-                            <span class="flex items-center gap-1.5">
-                                <svg class="w-3.5 h-3.5 text-amber-400 shrink-0 fill-current" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
-                                <span>Informasi & Panduan Top Up</span>
-                            </span>
-                            <span x-text="open ? '▲ Tutup' : '▼ Lihat'" class="text-[11px] text-slate-500 font-normal"></span>
-                        </button>
-                        <p x-show="open" x-cloak class="mt-2 text-slate-400 leading-relaxed border-t border-slate-800/80 pt-2">{{ $product->description }}</p>
-                    </div>
-                @endif
             </div>
         </div>
 
@@ -404,5 +404,13 @@
                 </button>
             </section>
         </form>
+
+        {{-- Deskripsi Produk di Bawah (SEO & Panduan) --}}
+        @if ($product->description)
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 text-xs leading-relaxed text-slate-400">
+                <h3 class="font-heading text-sm font-bold text-slate-200 mb-1.5">Tentang {{ $product->name }}</h3>
+                <p>{{ $product->description }}</p>
+            </div>
+        @endif
     </div>
 @endsection
