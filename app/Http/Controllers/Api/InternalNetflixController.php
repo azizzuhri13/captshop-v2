@@ -158,7 +158,7 @@ class InternalNetflixController extends Controller
                 'otp_token' => Str::random(48),
             ]);
 
-            $account->forceFill(['status' => 'reserved'])->save();
+            $account->forceFill(['status' => 'reserved', 'channel' => 'telegram'])->save();
             $order->setRelation('account', $account);
 
             return response()->json([
@@ -289,7 +289,7 @@ class InternalNetflixController extends Controller
                 'warranty_until' => $start->copy()->addDays($package['warranty_days'])->toDateString(),
             ])->save();
 
-            $account->forceFill(['status' => 'sold', 'sold_at' => now()])->save();
+            $account->forceFill(['status' => 'sold', 'channel' => 'telegram', 'sold_at' => now()])->save();
 
             $order->setRelation('account', $account);
 
@@ -349,7 +349,7 @@ class InternalNetflixController extends Controller
                 ->first();
 
             if ($account && $account->status === 'reserved') {
-                $account->forceFill(['status' => 'ready'])->save();
+                $account->forceFill(['status' => 'ready', 'channel' => null])->save();
             }
 
             $order->forceFill(['status' => 'cancelled', 'cancelled_at' => now()])->save();
@@ -485,7 +485,7 @@ class InternalNetflixController extends Controller
                     ->first();
 
                 if ($account && $account->status === 'reserved') {
-                    $account->forceFill(['status' => 'ready'])->save();
+                    $account->forceFill(['status' => 'ready', 'channel' => null])->save();
                 }
 
                 $order->forceFill(['status' => 'expired'])->save();

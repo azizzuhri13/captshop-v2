@@ -175,6 +175,7 @@ class DisneyPartnerApiTest extends TestCase
             ]);
 
         $this->assertEquals('sold', $acc->fresh()->status);
+        $this->assertEquals('telegram', $acc->fresh()->channel);
     }
 
     public function test_order_inquiry_recovers_state(): void

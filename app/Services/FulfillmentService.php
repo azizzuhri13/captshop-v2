@@ -135,6 +135,7 @@ class FulfillmentService
 
             $account->forceFill([
                 'status' => 'sold',
+                'channel' => 'web',
                 'transaction_id' => $transaction->id,
                 'sold_at' => now(),
             ])->save();
@@ -197,6 +198,7 @@ class FulfillmentService
 
             $account->forceFill([
                 'status' => 'sold',
+                'channel' => 'web',
                 'transaction_id' => $transaction->id,
                 'sold_at' => now(),
             ])->save();
@@ -259,6 +261,7 @@ class FulfillmentService
 
             $account->forceFill([
                 'status' => 'sold',
+                'channel' => 'web',
                 'transaction_id' => $transaction->id,
                 'sold_at' => now(),
             ])->save();

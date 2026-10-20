@@ -58,6 +58,7 @@ class NetflixFulfillmentTest extends TestCase
 
         $account->refresh();
         $this->assertEquals('sold', $account->status);
+        $this->assertEquals('web', $account->channel);
         $this->assertEquals($trx->id, $account->transaction_id);
 
         // Test invoice view publik (tanpa signature): kredensial terkunci

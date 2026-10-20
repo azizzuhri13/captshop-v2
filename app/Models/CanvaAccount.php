@@ -11,6 +11,7 @@ class CanvaAccount extends Model
         'email',
         'password',
         'status',
+        'channel',
         'transaction_id',
         'sold_at',
         'notes',

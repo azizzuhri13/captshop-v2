@@ -148,7 +148,7 @@ class InternalCanvaController extends Controller
                 'otp_token' => Str::random(48),
             ]);
 
-            $account->forceFill(['status' => 'reserved'])->save();
+            $account->forceFill(['status' => 'reserved', 'channel' => 'telegram'])->save();
 
             return response()->json([
                 'status' => 'success',
@@ -292,6 +292,7 @@ class InternalCanvaController extends Controller
 
             $account->forceFill([
                 'status' => 'sold',
+                'channel' => 'telegram',
                 'sold_at' => now(),
             ])->save();
 
@@ -346,7 +347,7 @@ class InternalCanvaController extends Controller
                 ->first();
 
             if ($account && $account->status === 'reserved') {
-                $account->forceFill(['status' => 'ready'])->save();
+                $account->forceFill(['status' => 'ready', 'channel' => null])->save();
             }
 
             $order->forceFill([
@@ -411,7 +412,7 @@ class InternalCanvaController extends Controller
                     ->first();
 
                 if ($account && $account->status === 'reserved') {
-                    $account->forceFill(['status' => 'ready'])->save();
+                    $account->forceFill(['status' => 'ready', 'channel' => null])->save();
                 }
 
                 $order->forceFill(['status' => 'expired'])->save();

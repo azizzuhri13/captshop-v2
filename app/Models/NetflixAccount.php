@@ -13,6 +13,7 @@ class NetflixAccount extends Model
         'profile_name',
         'pin',
         'status',
+        'channel',
         'transaction_id',
         'sold_at',
         'notes',

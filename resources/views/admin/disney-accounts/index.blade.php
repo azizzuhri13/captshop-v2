@@ -129,11 +129,23 @@
                             </span>
                         </td>
                         <td class="p-3 text-xs">
-                            @if ($acc->transaction)
-                                <a href="{{ route('admin.transactions.show', $acc->transaction) }}" class="font-mono text-primary-light hover:underline">
-                                    {{ $acc->transaction->invoice_id }}
-                                </a>
-                                <p class="text-[10px] text-slate-500">{{ $acc->sold_at?->translatedFormat('d M Y H:i') }}</p>
+                            @if ($acc->channel === 'telegram')
+                                <div class="inline-flex items-center gap-1 rounded bg-sky-500/15 border border-sky-500/30 px-2 py-0.5 text-[11px] font-semibold text-sky-400">
+                                    <span>🤖 Telegram</span>
+                                </div>
+                                <p class="text-[10px] text-slate-500 mt-0.5">{{ $acc->sold_at?->translatedFormat('d M Y H:i') }}</p>
+                            @elseif ($acc->transaction || $acc->channel === 'web')
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="inline-flex items-center gap-1 rounded bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+                                        🌐 Web
+                                    </span>
+                                    @if ($acc->transaction)
+                                        <a href="{{ route('admin.transactions.show', $acc->transaction) }}" class="font-mono text-primary-light hover:underline">
+                                            {{ $acc->transaction->invoice_id }}
+                                        </a>
+                                    @endif
+                                </div>
+                                <p class="text-[10px] text-slate-500 mt-0.5">{{ $acc->sold_at?->translatedFormat('d M Y H:i') }}</p>
                             @else
                                 <span class="text-slate-600">—</span>
                             @endif

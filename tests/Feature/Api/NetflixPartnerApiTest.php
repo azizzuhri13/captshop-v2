@@ -110,6 +110,7 @@ class NetflixPartnerApiTest extends TestCase
             ]);
 
         $this->assertEquals('reserved', $acc->fresh()->status);
+        $this->assertEquals('telegram', $acc->fresh()->channel);
     }
 
     public function test_reserve_idempotent_returns_same_reservation_without_extending_ttl(): void
@@ -205,6 +206,7 @@ class NetflixPartnerApiTest extends TestCase
             ]);
 
         $this->assertEquals('sold', $acc->fresh()->status);
+        $this->assertEquals('telegram', $acc->fresh()->channel);
         $this->assertNotNull($claim->json('data.start_date'));
         $this->assertNotNull($claim->json('data.end_date'));
         $this->assertNotNull($claim->json('data.warranty_until'));
@@ -295,6 +297,7 @@ class NetflixPartnerApiTest extends TestCase
         $cancel->assertStatus(200);
 
         $this->assertEquals('ready', $acc->fresh()->status);
+        $this->assertNull($acc->fresh()->channel);
         $this->assertEquals('cancelled', NetflixPartnerOrder::where('order_id', 'MTH-CANC-001')->first()->status);
 
         // Repeat cancel is safe and idempotent
