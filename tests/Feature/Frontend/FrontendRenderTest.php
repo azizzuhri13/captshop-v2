@@ -212,4 +212,29 @@ class FrontendRenderTest extends TestCase
         $response->assertSee('Menunggu Pembayaran');
         $response->assertSee('Instruksi Pembayaran');
     }
+
+    public function test_topup_shortcut_route_renders_product(): void
+    {
+        [$category, $product] = $this->seedFrontendFixture();
+
+        $response = $this->get('/topup/mobile-legends');
+
+        $response->assertStatus(200);
+        $response->assertSee('Mobile Legends');
+        $response->assertSee('Proses Kilat');
+        $response->assertSee('CS 24 Jam');
+        $response->assertSee('100% Aman');
+    }
+
+    public function test_product_page_renders_hero_banner_when_available(): void
+    {
+        [$category, $product] = $this->seedFrontendFixture();
+        $product->update(['banner' => 'https://example.com/banner-mlbb.jpg']);
+
+        $response = $this->get('/games/mobile-legends');
+
+        $response->assertStatus(200);
+        $response->assertSee('https://example.com/banner-mlbb.jpg');
+        $response->assertSee('PROSES KILAT 1-3 DETIK');
+    }
 }

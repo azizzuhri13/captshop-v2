@@ -106,24 +106,60 @@
         })"
          class="space-y-6"
     >
-        {{-- Header produk --}}
-        <header class="flex items-center gap-4">
-            <div class="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-slate-800 bg-slate-800">
-                @if ($product->iconUrl())
-                    <img src="{{ $product->iconUrl() }}" alt="{{ $product->name }}" class="h-full w-full object-cover">
-                @else
-                    <span class="font-heading text-xl font-bold text-slate-600">{{ strtoupper(substr($product->name, 0, 2)) }}</span>
-                @endif
+        {{-- Hero Banner Cover (Ourastore Style) --}}
+        @if ($product->bannerUrl())
+            <div class="relative w-full aspect-[16/9] sm:aspect-[21/9] overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
+                <img src="{{ $product->bannerUrl() }}" alt="{{ $product->name }}" class="w-full h-full object-cover">
+                <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/25 to-transparent"></div>
+                <div class="absolute top-3 left-3 bg-red-600/90 backdrop-blur-md border border-red-500/50 text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1.5">
+                    <svg class="w-3 h-3 fill-current text-amber-300" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    <span>PROSES KILAT 1-3 DETIK</span>
+                </div>
             </div>
-            <div>
-                <nav class="mb-1 flex items-center gap-2 text-xs text-slate-500" aria-label="Breadcrumb">
-                    <a href="{{ route('home') }}" class="hover:text-slate-300">Home</a>
-                    <span>/</span>
-                    <a href="{{ route('category.show', $product->category->slug) }}" class="hover:text-slate-300">{{ $product->category->name }}</a>
-                </nav>
-                <h1 class="font-heading text-xl font-bold text-slate-100">{{ $product->name }}</h1>
+        @endif
+
+        {{-- Header produk & Identitas --}}
+        <div class="{{ $product->bannerUrl() ? '-mt-10 sm:-mt-12 px-2' : '' }} relative z-10 space-y-4">
+            <header class="flex items-end gap-3.5">
+                <div class="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border-2 border-slate-700 bg-slate-900 shadow-2xl">
+                    @if ($product->iconUrl())
+                        <img src="{{ $product->iconUrl() }}" alt="{{ $product->name }}" class="h-full w-full object-cover">
+                    @else
+                        <span class="font-heading text-xl font-bold text-slate-600">{{ strtoupper(substr($product->name, 0, 2)) }}</span>
+                    @endif
+                </div>
+                <div class="pb-1 min-w-0 flex-1">
+                    <nav class="mb-1 flex items-center gap-1.5 text-xs text-slate-500" aria-label="Breadcrumb">
+                        <a href="{{ route('home') }}" class="hover:text-slate-300">Home</a>
+                        <span>/</span>
+                        <a href="{{ route('category.show', $product->category->slug) }}" class="hover:text-slate-300">{{ $product->category->name }}</a>
+                        <span class="text-slate-600">•</span>
+                        <span class="text-[10px] font-semibold text-emerald-400 flex items-center gap-0.5">
+                            <svg class="w-3 h-3 fill-current inline" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                            Official
+                        </span>
+                    </nav>
+                    <h1 class="font-heading text-xl sm:text-2xl font-black text-slate-100 leading-tight truncate">{{ $product->name }}</h1>
+                    <p class="text-xs text-slate-400 font-medium truncate">Top Up Instan 24/7 Bergaransi Resmi</p>
+                </div>
+            </header>
+
+            {{-- Pita Trust Badges --}}
+            <div class="grid grid-cols-3 gap-1.5 p-2 sm:p-2.5 rounded-xl bg-slate-800/60 border border-slate-800 text-[10px] sm:text-xs text-slate-300 font-medium text-center shadow-sm">
+                <div class="flex items-center justify-center gap-1.5 text-amber-400">
+                    <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    <span class="text-slate-200 font-semibold truncate">Proses Kilat</span>
+                </div>
+                <div class="flex items-center justify-center gap-1.5 text-sky-400 border-x border-slate-700/60">
+                    <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                    <span class="text-slate-200 font-semibold truncate">CS 24 Jam</span>
+                </div>
+                <div class="flex items-center justify-center gap-1.5 text-emerald-400">
+                    <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                    <span class="text-slate-200 font-semibold truncate">100% Aman</span>
+                </div>
             </div>
-        </header>
+        </div>
 
         @if ($product->description)
             <p class="rounded-xl border border-slate-800 bg-slate-800/40 p-4 text-sm leading-relaxed text-slate-400">{{ $product->description }}</p>

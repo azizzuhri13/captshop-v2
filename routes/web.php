@@ -84,6 +84,11 @@ Route::redirect('/privacy', '/kebijakan-privasi', 301);
 Route::redirect('/terms-of-service', '/syarat-ketentuan', 301);
 Route::redirect('/terms', '/syarat-ketentuan', 301);
 
+// Shortcut rute /topup/{slug}
+Route::get('/topup/{slug}', [ProductController::class, 'showTopup'])
+    ->where('slug', '[a-z0-9-]+')
+    ->name('product.topup');
+
 // Catch-all route produk ditempatkan di paling bawah agar tidak membajak route static
 Route::get('/{category}/{slug}', [ProductController::class, 'show'])
     ->where('category', '[a-z0-9-]+')

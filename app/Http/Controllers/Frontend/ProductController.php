@@ -40,6 +40,30 @@ class ProductController extends Controller
     }
 
     /**
+     * Shortcut rute /topup/{slug}: cari produk berdasarkan slug dan render langsung.
+     */
+    public function showTopup(string $slug): View
+    {
+        $product = Product::query()
+            ->where('is_active', true)
+            ->where('slug', $slug)
+            ->with([
+                'category:id,slug,name',
+                'items' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order'),
+            ])
+            ->firstOrFail();
+
+        $paymentChannels = PaymentChannel::query()
+            ->where('is_active', true)
+            ->where('gateway', config('payment.default'))
+            ->orderBy('sort_order')
+            ->get()
+            ->groupBy('group');
+
+        return view('frontend.product', compact('product', 'paymentChannels'));
+    }
+
+    /**
      * Halaman detail produk: single-page checkout (data, nominal, pembayaran, kontak).
      */
     public function show(string $categorySlug, string $productSlug): View
