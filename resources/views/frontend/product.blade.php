@@ -106,40 +106,59 @@
         })"
          class="space-y-6"
     >
-        {{-- Hero Banner Cover (Target Reference Style) --}}
-        @if ($product->bannerUrl())
-            <div class="relative w-full aspect-[16/9] sm:aspect-[21/9] overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-xl">
-                <img src="{{ $product->bannerUrl() }}" alt="{{ $product->name }}" class="w-full h-full object-cover">
-                <div class="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent"></div>
-                <div class="absolute top-3 left-3 bg-red-600/90 backdrop-blur-md border border-red-500/50 text-white text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1.5">
-                    <svg class="w-3 h-3 fill-current text-amber-300" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                    <span>PROSES KILAT 1-3 DETIK</span>
-                </div>
-            </div>
-        @endif
+        {{-- HERO SECTION ALA GAMBAR 1 (Target Reference) --}}
+        <div class="-mx-4 -mt-6 sm:mx-0 sm:mt-0 mb-5">
+            @if ($product->bannerUrl())
+                <!-- Banner Image with Edge-to-Edge & Gradient Fade Layer -->
+                <div class="relative w-full aspect-[16/9] sm:aspect-[21/9] overflow-hidden bg-slate-900">
+                    <img 
+                        src="{{ $product->bannerUrl() }}" 
+                        alt="{{ $product->name }}" 
+                        class="w-full h-full object-cover object-center"
+                    />
 
-        {{-- Header Identitas --}}
-        <div class="relative z-20 space-y-4">
-            <div class="flex items-start gap-3.5">
-                {{-- Hanya icon yang naik menimpa banner --}}
-                <div class="{{ $product->bannerUrl() ? '-mt-10 sm:-mt-12' : '' }} grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border-2 border-slate-700 bg-slate-950 shadow-2xl ring-4 ring-slate-950/60">
+                    <!-- Top Badge: PROSES KILAT 1–3 DETIK -->
+                    <div class="absolute top-3 left-3 z-20 flex items-center gap-1.5 px-3 py-1 rounded-full border border-white/25 bg-gradient-to-r from-[#f95738] via-[#d82b2b] to-[#881320] shadow-md">
+                        <svg class="w-3.5 h-3.5 fill-[#ffeb3b] shrink-0" viewBox="0 0 24 24">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                        </svg>
+                        <span class="text-[11px] font-extrabold tracking-wide text-white uppercase drop-shadow-sm whitespace-nowrap">
+                            PROSES KILAT 1-3 DETIK
+                        </span>
+                    </div>
+
+                    <!-- Progressive Dark Gradient Overlay (Menyatu Sempurna ke Background #0f172a / slate-900) -->
+                    <div class="absolute inset-0 z-10 bg-gradient-to-t from-slate-900 via-slate-900/60 via-40% to-transparent pointer-events-none"></div>
+                </div>
+            @endif
+
+            <!-- PRODUCT IDENTITY SECTION (Posisikan di Area Gradasi Sesuai Referensi) -->
+            <div class="relative z-20 px-4 flex items-center gap-3.5" style="{{ $product->bannerUrl() ? 'margin-top: -50px;' : 'padding-top: 1rem;' }}">
+                <!-- App Logo Icon -->
+                <div class="shrink-0 rounded-2xl bg-[#0e1424] border border-white/15 overflow-hidden shadow-2xl p-1 flex items-center justify-center" style="width: 72px; height: 72px; min-width: 72px; max-width: 72px;">
                     @if ($product->iconUrl())
-                        <img src="{{ $product->iconUrl() }}" alt="{{ $product->name }}" class="h-full w-full object-cover">
+                        <img src="{{ $product->iconUrl() }}" alt="{{ $product->name }}" class="w-full h-full object-contain rounded-xl">
                     @else
-                        <span class="font-heading text-xl font-bold text-slate-600">{{ strtoupper(substr($product->name, 0, 2)) }}</span>
+                        <span class="font-heading text-xl font-bold text-slate-500">{{ strtoupper(substr($product->name, 0, 2)) }}</span>
                     @endif
                 </div>
 
-                {{-- Teks tetap di posisi bawah, sejajar samping icon --}}
-                <div class="pt-1 min-w-0 flex-1">
-                    <div class="mb-1 flex items-center gap-1.5 text-xs">
-                        <span class="text-[11px] font-bold text-rose-500 uppercase tracking-wider">GAMES</span>
-                        <span class="text-slate-600">•</span>
-                        <span class="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
-                            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                            Official
+                <!-- Product Details -->
+                <div class="flex flex-col justify-center min-w-0 flex-1">
+                    <!-- Row 1: Category & Verification -->
+                    <div class="flex items-center gap-1.5 text-[11px] leading-tight">
+                        <span class="font-extrabold text-[#f87171] uppercase tracking-wider">
+                            {{ strtoupper(str_replace(['Top Up ', 'Top-up '], '', $product->category->name ?? 'GAMES')) }}
                         </span>
+                        <span class="text-slate-500 font-bold">•</span>
+                        <div class="flex items-center gap-1 text-[#10b981] font-bold">
+                            <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                            </svg>
+                            <span>Official</span>
+                        </div>
                     </div>
+
                     @php
                         $publisher = match($product->slug) {
                             'mobile-legends', 'magic-chess-go-go' => 'Moonton',
@@ -156,24 +175,45 @@
                             default => $product->category->name ?? 'CAPTSHOP'
                         };
                     @endphp
-                    <h1 class="font-heading text-xl sm:text-2xl font-black text-slate-100 leading-tight truncate">{{ $product->name }}</h1>
-                    <p class="text-xs text-slate-400 font-medium truncate mt-0.5">{{ $publisher }} • Top Up Instan 24/7</p>
+
+                    <!-- Row 2: Title -->
+                    <h1 class="text-xl sm:text-2xl font-bold text-white tracking-tight leading-snug mt-0.5 truncate">
+                        {{ $product->name }}
+                    </h1>
+
+                    <!-- Row 3: Subtitle -->
+                    <p class="text-xs text-slate-400 font-normal flex items-center gap-1 truncate">
+                        <span>{{ $publisher }}</span>
+                        <span>•</span>
+                        <span>Top Up Instan 24/7</span>
+                    </p>
                 </div>
             </div>
 
-            {{-- Pita Trust Badges --}}
-            <div class="grid grid-cols-3 gap-1.5 p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[10px] sm:text-xs text-slate-300 font-medium text-center shadow-sm">
-                <div class="flex items-center justify-center gap-1.5 text-amber-400">
-                    <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                    <span class="text-slate-200 font-semibold truncate">Proses Kilat</span>
+            <!-- TRUST BADGE BAR (Panel Keunggulan - 3 Columns) -->
+            <div class="mt-3.5 mx-4 bg-[#0d1424] border border-white/10 rounded-xl py-2.5 px-1 grid grid-cols-3 divide-x divide-white/10 shadow-lg">
+                <!-- Item 1: Speed -->
+                <div class="flex items-center justify-center gap-1.5 px-1">
+                    <svg class="w-3.5 h-3.5 fill-[#facc15] shrink-0" viewBox="0 0 24 24">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                    </svg>
+                    <span class="text-[11.5px] font-semibold text-white tracking-tight whitespace-nowrap">Proses Kilat</span>
                 </div>
-                <div class="flex items-center justify-center gap-1.5 text-sky-400 border-x border-slate-800">
-                    <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-                    <span class="text-slate-200 font-semibold truncate">CS 24 Jam</span>
+
+                <!-- Item 2: CS 24 Hours -->
+                <div class="flex items-center justify-center gap-1.5 px-1">
+                    <svg class="w-3.5 h-3.5 fill-[#38bdf8] shrink-0" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd" />
+                    </svg>
+                    <span class="text-[11.5px] font-semibold text-white tracking-tight whitespace-nowrap">CS 24 Jam</span>
                 </div>
-                <div class="flex items-center justify-center gap-1.5 text-emerald-400">
-                    <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                    <span class="text-slate-200 font-semibold truncate">100% Aman</span>
+
+                <!-- Item 3: Guarantee -->
+                <div class="flex items-center justify-center gap-1.5 px-1">
+                    <svg class="w-3.5 h-3.5 fill-[#10b981] shrink-0" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                    <span class="text-[11.5px] font-semibold text-white tracking-tight whitespace-nowrap">100% Aman</span>
                 </div>
             </div>
         </div>
