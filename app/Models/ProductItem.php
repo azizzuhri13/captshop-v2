@@ -106,6 +106,10 @@ class ProductItem extends Model
             return (int) $this->stock;
         }
 
+        if ($this->product?->isPremiumAccount()) {
+            return 0;
+        }
+
         return null;
     }
 
@@ -120,6 +124,6 @@ class ProductItem extends Model
 
         $stock = $this->getStock();
 
-        return $stock !== null && $stock <= 0;
+        return $stock === null || $stock <= 0;
     }
 }

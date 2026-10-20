@@ -322,7 +322,7 @@
                                                 :class="item.out_of_stock 
                                                     ? 'bg-rose-950/90 text-rose-300 border-rose-800/80' 
                                                     : 'bg-emerald-950/90 text-emerald-300 border-emerald-800/80'"
-                                                x-text="item.out_of_stock ? 'Habis' : 'Stok: ' + item.stock"
+                                                x-text="item.out_of_stock ? 'Stok Kosong' : 'Stok: ' + item.stock"
                                             ></span>
                                         </template>
 

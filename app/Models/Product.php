@@ -116,6 +116,8 @@ class Product extends Model
             if ($trackedItems->isNotEmpty()) {
                 return (int) $trackedItems->sum(fn ($item) => (int) $item->getStock());
             }
+
+            return 0;
         }
 
         return null;
@@ -132,6 +134,6 @@ class Product extends Model
 
         $stock = $this->getStock();
 
-        return $stock !== null && $stock <= 0;
+        return $stock === null || $stock <= 0;
     }
 }
