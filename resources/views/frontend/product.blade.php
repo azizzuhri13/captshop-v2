@@ -104,7 +104,7 @@
             customer_email: {{ Js::from(old('customer_email', '')) }},
             couponCode: {{ Js::from(old('coupon_code', '')) }},
         })"
-         class="space-y-6"
+         class="space-y-6 pb-28"
     >
         {{-- HERO SECTION ALA GAMBAR 1 (Target Reference) --}}
         <div class="-mx-4 -mt-6 sm:mx-0 sm:mt-0 mb-5">
