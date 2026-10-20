@@ -44,6 +44,10 @@ class OrderService
             throw new \InvalidArgumentException('Item tidak ditemukan atau tidak aktif.');
         }
 
+        if ($item->isOutOfStock()) {
+            throw new \InvalidArgumentException('Maaf, stok untuk paket '.$item->name.' sedang habis.');
+        }
+
         $channel = PaymentChannel::query()
             ->where('is_active', true)
             ->where('gateway', $this->gateway->gatewayName())

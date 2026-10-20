@@ -146,6 +146,9 @@ Alpine.data('orderForm', (config) => ({
     },
 
     get canSubmit() {
+        if (this.selectedItem && this.selectedItem.out_of_stock) {
+            return false;
+        }
         return Boolean(this.itemId && this.paymentChannel && this.form.customer_phone);
     },
 
@@ -153,6 +156,10 @@ Alpine.data('orderForm', (config) => ({
      * Daftar isian yang belum lengkap — dipakai sebagai petunjuk di atas tombol beli.
      */
     get missingHint() {
+        if (this.selectedItem && this.selectedItem.out_of_stock) {
+            return 'nominal yang masih tersedia (stok paket ini habis)';
+        }
+
         const missing = [];
 
         if (! this.itemId) {

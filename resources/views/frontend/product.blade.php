@@ -14,6 +14,9 @@
         'price' => (float) $item->effectivePrice(),
         'original_price' => (float) $item->sell_price,
         'flash_sale' => $item->isFlashSaleActive(),
+        'stock' => $item->getStock(),
+        'is_stock_tracked' => $item->isStockTracked(),
+        'out_of_stock' => $item->isOutOfStock(),
     ])->values();
 
     $alpineFields = collect($product->input_fields ?? [])->map(fn ($field) => [
@@ -307,10 +310,22 @@
                                 <template x-for="item in grp.items" :key="item.id">
                                     <button
                                         type="button"
-                                        @click="itemId = item.id"
-                                        :class="itemId === item.id ? 'border-primary bg-primary/15' : 'border-slate-700 bg-slate-800 hover:border-slate-600'"
+                                        @click="! item.out_of_stock && (itemId = item.id)"
+                                        :disabled="item.out_of_stock"
+                                        :class="item.out_of_stock ? 'opacity-50 cursor-not-allowed border-slate-800 bg-slate-900/50' : (itemId === item.id ? 'border-primary bg-primary/15' : 'border-slate-700 bg-slate-800 hover:border-slate-600')"
                                         class="relative flex flex-col items-center gap-0.5 rounded-xl border px-3 py-3 text-center transition"
                                     >
+                                        {{-- Label Stok Khusus Akun Premium --}}
+                                        <template x-if="item.is_stock_tracked">
+                                            <span 
+                                                class="absolute -top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full border shadow-sm"
+                                                :class="item.out_of_stock 
+                                                    ? 'bg-rose-950/90 text-rose-300 border-rose-800/80' 
+                                                    : 'bg-emerald-950/90 text-emerald-300 border-emerald-800/80'"
+                                                x-text="item.out_of_stock ? 'Habis' : 'Stok: ' + item.stock"
+                                            ></span>
+                                        </template>
+
                                         <span class="text-sm font-semibold text-slate-100" x-text="item.name"></span>
                                         <span class="font-heading text-sm font-bold" :class="item.flash_sale ? 'text-accent' : 'text-secondary'" x-text="formatRupiah(item.price)"></span>
                                         <span x-show="item.flash_sale" class="text-[11px] text-slate-500 line-through" x-text="formatRupiah(item.original_price)"></span>
@@ -436,11 +451,21 @@
 
                 <input type="hidden" name="coupon_code" :value="coupon ? coupon.code : ''">
 
-                <p x-show="! canSubmit" x-cloak class="mb-2 text-center text-xs text-amber-400/90">
+                <p x-show="selectedItem && selectedItem.out_of_stock" x-cloak class="mb-2 text-center text-xs text-rose-400 font-semibold">
+                    ⚠️ Maaf, stok akun untuk paket ini sedang habis. Silakan pilih paket lain.
+                </p>
+
+                <p x-show="! canSubmit && (! selectedItem || ! selectedItem.out_of_stock)" x-cloak class="mb-2 text-center text-xs text-amber-400/90">
                     Pilih <span x-text="missingHint"></span> terlebih dahulu.
                 </p>
 
-                <button type="submit" class="btn-primary w-full text-base" :disabled="! canSubmit || processing" x-text="processing ? 'Memproses...' : '🛒 BELI SEKARANG'">
+                <button 
+                    type="submit" 
+                    class="btn-primary w-full text-base" 
+                    :disabled="! canSubmit || processing || (selectedItem && selectedItem.out_of_stock)" 
+                    :class="(selectedItem && selectedItem.out_of_stock) ? 'opacity-50 cursor-not-allowed bg-slate-800 hover:bg-slate-800 text-slate-400 border-slate-700' : ''"
+                    x-text="processing ? 'Memproses...' : ((selectedItem && selectedItem.out_of_stock) ? '⚠️ STOK HABIS' : '🛒 BELI SEKARANG')"
+                >
                     🛒 BELI SEKARANG
                 </button>
             </section>

@@ -84,4 +84,54 @@ class Product extends Model
     {
         return $this->resolveImageUrl($this->banner);
     }
+
+    /**
+     * Cek apakah produk termasuk kategori akun premium / streaming.
+     */
+    public function isPremiumAccount(): bool
+    {
+        return ($this->category?->slug === 'apps-premium')
+            || in_array($this->slug, ['netflix-premium', 'disney-plus', 'canva-pro'], true);
+    }
+
+    /**
+     * Hitung total ketersediaan stok produk akun premium.
+     */
+    public function getStock(): ?int
+    {
+        if ($this->slug === 'netflix-premium') {
+            return \App\Models\NetflixAccount::where('status', 'ready')->count();
+        }
+
+        if ($this->slug === 'disney-plus') {
+            return \App\Models\DisneyAccount::where('status', 'ready')->count();
+        }
+
+        if ($this->slug === 'canva-pro') {
+            return \App\Models\CanvaAccount::where('status', 'ready')->count();
+        }
+
+        if ($this->isPremiumAccount()) {
+            $trackedItems = $this->items->filter(fn ($item) => $item->isStockTracked());
+            if ($trackedItems->isNotEmpty()) {
+                return (int) $trackedItems->sum(fn ($item) => (int) $item->getStock());
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Cek apakah stok produk premium habis.
+     */
+    public function isOutOfStock(): bool
+    {
+        if (! $this->isPremiumAccount()) {
+            return false;
+        }
+
+        $stock = $this->getStock();
+
+        return $stock !== null && $stock <= 0;
+    }
 }

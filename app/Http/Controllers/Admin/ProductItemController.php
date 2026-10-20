@@ -202,6 +202,7 @@ class ProductItemController extends Controller
             'supplier_item_code' => ['nullable', 'string', 'max:100'],
             'buy_price' => ['required', 'numeric', 'min:0'],
             'sell_price' => ['required', 'numeric', 'min:0'],
+            'stock' => ['nullable', 'integer', 'min:0'],
             'flash_sale_price' => ['nullable', 'numeric', 'min:0'],
             'flash_sale_start' => ['nullable', 'date'],
             'flash_sale_end' => ['nullable', 'date', 'after_or_equal:flash_sale_start'],

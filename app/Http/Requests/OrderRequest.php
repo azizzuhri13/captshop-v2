@@ -67,6 +67,10 @@ class OrderRequest extends FormRequest
                 return; // sudah divalidasi rule exists
             }
 
+            if ($item->isOutOfStock()) {
+                $validator->errors()->add('product_item_id', 'Maaf, stok untuk paket '.$item->name.' sedang habis.');
+            }
+
             foreach ($item->product?->input_fields ?? [] as $field) {
                 if (is_array($field) && ($field['required'] ?? false) === true) {
                     $value = $this->input('customer_data.'.$field['name']);
