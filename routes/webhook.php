@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\InternalCanvaController;
+use App\Http\Controllers\Api\InternalCapcutController;
 use App\Http\Controllers\Api\InternalDisneyController;
 use App\Http\Controllers\Api\InternalNetflixController;
 use App\Http\Controllers\Webhook\BelibayarController;
@@ -61,4 +62,17 @@ Route::prefix('api/internal/canva')->middleware('throttle:60,1')->group(function
 
     // Publik: pembeli membaca info kredensial miliknya via token unik.
     Route::get('/otp/{token}', [InternalCanvaController::class, 'otp']);
+});
+
+// Endpoint Private untuk Bot Telegram (Sinkronisasi Stok & Pesanan CapCut Pro)
+Route::prefix('api/internal/capcut')->middleware('throttle:60,1')->group(function () {
+    Route::get('/stock', [InternalCapcutController::class, 'stock']);
+    Route::get('/packages', [InternalCapcutController::class, 'packages']);
+    Route::post('/reservations', [InternalCapcutController::class, 'reserve']);
+    Route::get('/orders/{order_id}', [InternalCapcutController::class, 'order']);
+    Route::post('/claim', [InternalCapcutController::class, 'claim']);
+    Route::post('/cancel-reservation', [InternalCapcutController::class, 'cancelReservation']);
+
+    // Publik: pembeli membaca info kredensial miliknya via token unik.
+    Route::get('/otp/{token}', [InternalCapcutController::class, 'otp']);
 });

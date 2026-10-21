@@ -103,4 +103,20 @@ return [
         ],
     ],
 
+    'capcut' => [
+        'currency' => 'IDR',
+        'ttl' => ['min' => 5, 'max' => 30, 'default' => 15],
+
+        'packages' => [
+            '1m' => [
+                'name' => 'CapCut Pro 1 Bulan',
+                'duration_days' => 30,
+                'warranty_days' => 30,
+                'price' => 25000,
+                'currency' => 'IDR',
+                'expiry_rules' => 'Berjalan sejak start_date (Asia/Jakarta), berakhir pada end_date; garansi 30 hari.',
+            ],
+        ],
+    ],
+
 ];

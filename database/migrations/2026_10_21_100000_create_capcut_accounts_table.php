@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('email');
             $table->string('password');
             $table->string('status', 20)->default('ready')->index();
-            $table->string('channel', 20)->default('web')->index();
+            $table->string('channel', 30)->nullable()->index();
             $table->foreignId('transaction_id')->nullable()->constrained('transactions')->nullOnDelete();
             $table->timestamp('sold_at')->nullable();
             $table->text('notes')->nullable();
