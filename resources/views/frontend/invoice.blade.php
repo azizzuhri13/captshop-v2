@@ -30,10 +30,11 @@
             $isNetflix = ($transaction->productItem?->product?->slug === 'netflix-premium') || $transaction->netflixAccount !== null;
             $isDisney = ($transaction->productItem?->product?->slug === 'disney-plus') || $transaction->disneyAccount !== null;
             $isCanva = ($transaction->productItem?->product?->slug === 'canva-pro') || $transaction->canvaAccount !== null;
-            $isStreaming = $isNetflix || $isDisney || $isCanva;
+            $isCapcut = ($transaction->productItem?->product?->slug === 'capcut') || $transaction->capcutAccount !== null;
+            $isStreaming = $isNetflix || $isDisney || $isCanva || $isCapcut;
             $streamingData = null;
             if ($isStreaming && in_array($transaction->status, ['completed'])) {
-                $acc = $transaction->netflixAccount ?? $transaction->disneyAccount ?? $transaction->canvaAccount;
+                $acc = $transaction->netflixAccount ?? $transaction->disneyAccount ?? $transaction->canvaAccount ?? $transaction->capcutAccount;
                 if ($acc) {
                     $streamingData = [
                         'email' => $acc->email,
@@ -63,6 +64,11 @@
                 $badgeBg = 'bg-teal-500/15 border-teal-500/40 text-teal-400';
                 $glowBg = 'bg-teal-500/20';
                 $iconText = '🎨';
+            } elseif ($isCapcut) {
+                $cardBorder = 'border-slate-500/60 shadow-slate-500/20';
+                $badgeBg = 'bg-slate-500/15 border-slate-500/40 text-slate-300';
+                $glowBg = 'bg-slate-500/20';
+                $iconText = '✂️';
             }
         @endphp
 
@@ -152,6 +158,10 @@
                         <a href="https://www.canva.com/login" target="_blank" rel="noopener" class="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-700 py-2.5 px-4 text-xs font-bold text-white shadow-lg shadow-teal-600/30 transition">
                             🎨 Buka Canva & Login
                         </a>
+                    @elseif ($isCapcut)
+                        <a href="https://www.capcut.com/login" target="_blank" rel="noopener" class="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 py-2.5 px-4 text-xs font-bold text-white shadow-lg shadow-black/30 transition">
+                            ✂️ Buka CapCut & Login
+                        </a>
                     @elseif ($isDisney)
                         <a href="https://www.hotstar.com/id" target="_blank" rel="noopener" class="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 hover:bg-sky-700 py-2.5 px-4 text-xs font-bold text-white shadow-lg shadow-sky-600/30 transition">
                             🏰 Buka Disney+ & Login
@@ -162,7 +172,7 @@
                         </a>
                     @endif
 
-                    @if (!$isCanva)
+                    @if (!$isCanva && !$isCapcut)
                         <a href="/admin/" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 py-2.5 px-4 text-xs font-semibold text-slate-200 transition">
                             🔐 Ambil Kode OTP / Masuk
                         </a>

@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\BannerController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CanvaAccountController;
+use App\Http\Controllers\Admin\CapcutAccountController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DisneyAccountController;
 use App\Http\Controllers\Admin\NetflixAccountController;
@@ -46,6 +47,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::resource('disney-accounts', DisneyAccountController::class)->only(['index', 'store', 'update', 'destroy']);
             Route::post('canva-accounts/import', [CanvaAccountController::class, 'import'])->name('canva-accounts.import');
             Route::resource('canva-accounts', CanvaAccountController::class)->only(['index', 'store', 'update', 'destroy']);
+            Route::post('capcut-accounts/import', [CapcutAccountController::class, 'import'])->name('capcut-accounts.import');
+            Route::resource('capcut-accounts', CapcutAccountController::class)->only(['index', 'store', 'update', 'destroy']);
             Route::resource('products', ProductController::class)->except(['show']);
         });
 

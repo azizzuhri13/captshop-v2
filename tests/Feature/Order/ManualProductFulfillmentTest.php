@@ -22,8 +22,8 @@ class ManualProductFulfillmentTest extends TestCase
         $category = Category::create(['name' => 'Aplikasi', 'slug' => 'aplikasi']);
         $product = Product::create([
             'category_id' => $category->id,
-            'name' => 'CapCut Pro',
-            'slug' => 'capcut',
+            'name' => 'Viu Premium',
+            'slug' => 'viu',
             'supplier_type' => 'manual',
             'is_active' => true,
         ]);

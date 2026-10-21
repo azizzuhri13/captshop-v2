@@ -80,7 +80,7 @@ class ProductItem extends Model
      */
     public function hasDedicatedStock(): bool
     {
-        return in_array($this->product?->slug, ['netflix-premium', 'disney-plus', 'canva-pro'], true);
+        return in_array($this->product?->slug, ['netflix-premium', 'disney-plus', 'canva-pro', 'capcut'], true);
     }
 
     /**
@@ -100,6 +100,10 @@ class ProductItem extends Model
 
         if ($slug === 'canva-pro') {
             return \App\Models\CanvaAccount::where('status', 'ready')->count();
+        }
+
+        if ($slug === 'capcut') {
+            return \App\Models\CapcutAccount::where('status', 'ready')->count();
         }
 
         if ($this->stock !== null) {

@@ -31,6 +31,7 @@
     $netflixReady = \App\Models\NetflixAccount::where('status', 'ready')->count();
     $disneyReady = \App\Models\DisneyAccount::where('status', 'ready')->count();
     $canvaReady = \App\Models\CanvaAccount::where('status', 'ready')->count();
+    $capcutReady = \App\Models\CapcutAccount::where('status', 'ready')->count();
 
     // Menu hanya tampil bila role admin memiliki izinnya
     $menus = [
@@ -66,11 +67,12 @@
             'label' => 'Stok Prem',
             'svg' => '<path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>',
             'can' => 'products.manage',
-            'patterns' => ['admin.netflix-accounts.*', 'admin.disney-accounts.*', 'admin.canva-accounts.*'],
+            'patterns' => ['admin.netflix-accounts.*', 'admin.disney-accounts.*', 'admin.canva-accounts.*', 'admin.capcut-accounts.*'],
             'children' => [
                 ['label' => 'Stok Netflix', 'route' => 'admin.netflix-accounts.index', 'count' => $netflixReady, 'pattern' => 'admin.netflix-accounts.*'],
                 ['label' => 'Stok Disney', 'route' => 'admin.disney-accounts.index', 'count' => $disneyReady, 'pattern' => 'admin.disney-accounts.*'],
                 ['label' => 'Stok Canva', 'route' => 'admin.canva-accounts.index', 'count' => $canvaReady, 'pattern' => 'admin.canva-accounts.*'],
+                ['label' => 'Stok CapCut', 'route' => 'admin.capcut-accounts.index', 'count' => $capcutReady, 'pattern' => 'admin.capcut-accounts.*'],
             ],
         ],
         [

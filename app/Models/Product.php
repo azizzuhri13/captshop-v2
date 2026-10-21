@@ -91,7 +91,7 @@ class Product extends Model
     public function isPremiumAccount(): bool
     {
         return ($this->category?->slug === 'apps-premium')
-            || in_array($this->slug, ['netflix-premium', 'disney-plus', 'canva-pro'], true);
+            || in_array($this->slug, ['netflix-premium', 'disney-plus', 'canva-pro', 'capcut'], true);
     }
 
     /**
@@ -109,6 +109,10 @@ class Product extends Model
 
         if ($this->slug === 'canva-pro') {
             return \App\Models\CanvaAccount::where('status', 'ready')->count();
+        }
+
+        if ($this->slug === 'capcut') {
+            return \App\Models\CapcutAccount::where('status', 'ready')->count();
         }
 
         if ($this->isPremiumAccount()) {

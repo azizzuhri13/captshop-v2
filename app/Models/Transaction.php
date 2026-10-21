@@ -76,6 +76,11 @@ class Transaction extends Model
         return $this->hasOne(CanvaAccount::class);
     }
 
+    public function capcutAccount(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(CapcutAccount::class);
+    }
+
     public function product(): HasOneThrough
     {
         return $this->hasOneThrough(

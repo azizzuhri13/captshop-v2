@@ -48,8 +48,12 @@ class FulfillmentService
             return $this->fulfillCanvaStock($transaction);
         }
 
+        if ($productSlug === 'capcut') {
+            return $this->fulfillCapcutStock($transaction);
+        }
+
         if ($supplierType === 'manual') {
-            // Produk manual (CapCut, Viu, Wukong, dsb) tidak boleh dialokasikan stok Netflix.
+            // Produk manual (Viu, Wukong, dsb) tidak boleh dialokasikan stok Netflix/Canva/Capcut.
             // Status tetap processing untuk penanganan manual admin.
             $transaction->forceFill([
                 'status' => 'processing',
@@ -280,6 +284,65 @@ class FulfillmentService
             $transaction->forceFill([
                 'status' => 'completed',
                 'supplier_ref' => 'STOCK-CNVA-'.$account->id,
+                'supplier_sn' => $snText,
+                'supplier_response' => json_encode($snPayload),
+                'completed_at' => now(),
+            ])->save();
+
+            $this->notify(fn () => $this->notifications->orderCompleted($transaction), $transaction, 'completed');
+
+            return $transaction;
+        });
+    }
+
+    /**
+     * Alokasi stok akun CapCut internal secara atomic dan aman dari race-condition.
+     */
+    protected function fulfillCapcutStock(Transaction $transaction): Transaction
+    {
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($transaction) {
+            $account = \App\Models\CapcutAccount::where('status', 'ready')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $account) {
+                Log::warning('Stok akun CapCut habis untuk transaksi '.$transaction->invoice_id);
+                $transaction->forceFill([
+                    'status' => 'processing',
+                    'supplier_response' => json_encode(['error' => 'Stok akun CapCut habis, menunggu restock']),
+                ])->save();
+
+                try {
+                    app(\App\Services\Notification\TelegramAlertService::class)->alertFulfillmentFailed(
+                        $transaction,
+                        'Stok akun CapCut habis di database! Harap segera restock.'
+                    );
+                } catch (\Throwable) {}
+
+                return $transaction;
+            }
+
+            $account->forceFill([
+                'status' => 'sold',
+                'channel' => 'web',
+                'transaction_id' => $transaction->id,
+                'sold_at' => now(),
+            ])->save();
+
+            $snPayload = [
+                'email' => $account->email,
+                'password' => $account->password,
+            ];
+
+            $snText = sprintf(
+                'Email: %s | Pass: %s',
+                $account->email,
+                $account->password
+            );
+
+            $transaction->forceFill([
+                'status' => 'completed',
+                'supplier_ref' => 'STOCK-CPCT-'.$account->id,
                 'supplier_sn' => $snText,
                 'supplier_response' => json_encode($snPayload),
                 'completed_at' => now(),

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Order;
 
 use App\Models\CanvaAccount;
+use App\Models\CapcutAccount;
 use App\Models\Category;
 use App\Models\NetflixAccount;
 use App\Models\PaymentChannel;
@@ -106,6 +107,38 @@ class PremiumAccountStockTest extends TestCase
 
         $this->assertFalse($item->isOutOfStock());
         $this->assertEquals(1, $item->getStock());
+    }
+
+    public function test_capcut_with_ready_stock_can_be_ordered(): void
+    {
+        $category = Category::create(['name' => 'Apps Premium', 'slug' => 'apps-premium']);
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'Capcut',
+            'slug' => 'capcut',
+            'supplier_type' => 'manual',
+            'is_active' => true,
+        ]);
+        $item = ProductItem::create([
+            'product_id' => $product->id,
+            'name' => '1 bulan',
+            'buy_price' => 20000,
+            'sell_price' => 25000,
+            'is_active' => true,
+        ]);
+
+        $this->assertTrue($item->isOutOfStock());
+        $this->assertEquals(0, $item->getStock());
+
+        // Tambah akun ready
+        CapcutAccount::create([
+            'email' => 'ready@capcut.com',
+            'password' => 'secret123',
+            'status' => 'ready',
+        ]);
+
+        $this->assertFalse($item->fresh()->isOutOfStock());
+        $this->assertEquals(1, $item->fresh()->getStock());
     }
 
     public function test_non_premium_product_is_not_stock_tracked(): void
