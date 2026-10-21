@@ -25,6 +25,32 @@ Route::prefix('webhook')->group(function () {
     Route::post('/digiflazz', [DigiflazzController::class, 'handle'])->middleware('throttle:60,1');
 });
 
+// Endpoint Master untuk Cek Semua Stok Sekaligus (1 Key untuk Semua Produk)
+Route::get('api/internal/stock', function (\Illuminate\Http\Request $request) {
+    $configuredKey = (string) \App\Support\Credentials::get('internal_api_key', config('services.internal_api_key'));
+    $providedKey = (string) ($request->header('X-Internal-Key') ?? $request->bearerToken() ?? $request->input('api_key') ?? '');
+    if (empty($providedKey) || ! hash_equals($configuredKey, $providedKey)) {
+        abort(401, 'Unauthorized internal access.');
+    }
+
+    return response()->json([
+        'status' => 'success',
+        'key_name' => 'Internal Partner Master Key',
+        'ready_stocks' => [
+            'netflix' => \App\Models\NetflixAccount::where('status', 'ready')->count(),
+            'disney' => \App\Models\DisneyAccount::where('status', 'ready')->count(),
+            'canva' => \App\Models\CanvaAccount::where('status', 'ready')->count(),
+            'capcut' => \App\Models\CapcutAccount::where('status', 'ready')->count(),
+        ],
+        'endpoints' => [
+            'netflix' => '/api/internal/netflix',
+            'disney' => '/api/internal/disney',
+            'canva' => '/api/internal/canva',
+            'capcut' => '/api/internal/capcut',
+        ],
+    ]);
+})->middleware('throttle:60,1');
+
 // Endpoint Private untuk Bot Telegram (Sinkronisasi Stok & Pesanan Netflix)
 Route::prefix('api/internal/netflix')->middleware('throttle:60,1')->group(function () {
     Route::get('/stock', [InternalNetflixController::class, 'stock']);
