@@ -154,7 +154,7 @@ Artisan::command('supplier:sync-prices', function () {
 
 Schedule::command('orders:expire')->everyMinute();
 Schedule::command('orders:reconcile')->everyFiveMinutes()->withoutOverlapping();
-Schedule::command('supplier:sync-prices')->cron('0 */2 * * *');
+Schedule::command('supplier:sync-digiflazz')->everyTwoHours()->withoutOverlapping();
 
 Artisan::command('supplier:check-balance', function () {
     try {
