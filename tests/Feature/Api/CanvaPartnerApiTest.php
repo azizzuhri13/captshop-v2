@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\CanvaAccount;
 use App\Models\CanvaPartnerOrder;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -155,12 +156,57 @@ class CanvaPartnerApiTest extends TestCase
 
         $res = $this->withHeaders($this->headers())->getJson('/api/internal/canva/orders/CNV-INQ-001');
         $res->assertStatus(200)
-            ->assertJson([
-                'status' => 'success',
-                'data' => [
-                    'order_id' => 'CNV-INQ-001',
-                    'status' => 'reserved',
-                ],
-            ]);
-    }
-}
+        ->assertJson([
+            'status' => 'success',
+            'data' => [
+                'order_id' => 'CNV-INQ-001',
+                'status' => 'reserved',
+            ],
+        ]);
+        }
+
+        public function test_claim_verified_at_round_trips_wib_utc_replay_and_get(): void
+        {
+        // 06:30 WIB = 23:30 UTC hari sebelumnya: sekaligus menguji rollover tanggal.
+        $wib = Carbon::parse('2026-10-22 06:30:00', 'Asia/Jakarta');
+
+        foreach (['wib' => $wib, 'utc' => $wib->copy()->setTimezone('UTC')] as $label => $input) {
+        $orderId = 'CNV-TZ-'.strtoupper($label);
+        $email = "tz-{$label}@canva.com";
+        CanvaAccount::create(['email' => $email, 'password' => 'p', 'status' => 'ready']);
+
+        $this->withHeaders($this->headers())->postJson('/api/internal/canva/reservations', [
+            'order_id' => $orderId,
+            'package_id' => '1m',
+            'buyer_reference' => '7302'.$label,
+        ])->assertStatus(201);
+
+        $body = [
+            'order_id' => $orderId,
+            'payment_reference' => 'PAY-CNV-TZ-'.$label,
+            'amount' => 15000,
+            'currency' => 'IDR',
+            'verified_at' => $input->toIso8601String(),
+        ];
+
+        $claim = $this->withHeaders($this->headers())->postJson('/api/internal/canva/claim', $body);
+        $claim->assertStatus(200)->assertJson(['data' => ['status' => 'completed']]);
+
+        $this->assertSame(
+            $wib->getTimestamp(),
+            Carbon::parse($claim->json('data.payment.verified_at'))->getTimestamp(),
+            "claim mengembalikan instant yang bergeser untuk input {$label}"
+        );
+
+        $replay = $this->withHeaders($this->headers())->postJson('/api/internal/canva/claim', $body);
+        $replay->assertStatus(200)->assertJson(['duplicated' => true]);
+        $this->assertSame($claim->json('data.payment.verified_at'), $replay->json('data.payment.verified_at'));
+
+        $inquiry = $this->withHeaders($this->headers())->getJson('/api/internal/canva/orders/'.$orderId);
+        $inquiry->assertStatus(200)->assertJson([
+            'data' => ['status' => 'completed', 'account' => ['email' => $email]],
+        ]);
+        $this->assertSame($claim->json('data.payment.verified_at'), $inquiry->json('data.payment.verified_at'));
+        }
+        }
+        }

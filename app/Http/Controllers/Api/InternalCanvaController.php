@@ -202,7 +202,9 @@ class InternalCanvaController extends Controller
             'payment_reference' => $validated['payment_reference'],
             'payment_amount' => $validated['amount'],
             'payment_currency' => strtoupper($validated['currency']),
-            'verified_at' => \Carbon\Carbon::parse($validated['verified_at'])->setTimezone('UTC'),
+            // Kolom datetime tanpa offset disimpan apa adanya, jadi harus dinormalkan
+            // ke zona aplikasi. Konversi ke UTC menggeser instant saat dibaca kembali.
+            'verified_at' => \Carbon\Carbon::parse($validated['verified_at'])->setTimezone(config('app.timezone')),
         ];
 
         return DB::transaction(function () use ($validated, $payment) {

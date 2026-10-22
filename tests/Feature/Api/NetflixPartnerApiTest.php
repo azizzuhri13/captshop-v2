@@ -4,7 +4,9 @@ namespace Tests\Feature\Api;
 
 use App\Models\NetflixAccount;
 use App\Models\NetflixPartnerOrder;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class NetflixPartnerApiTest extends TestCase
@@ -446,5 +448,121 @@ class NetflixPartnerApiTest extends TestCase
 
         // Invalid token gets 404
         $this->getJson('/api/internal/netflix/otp/invalid-token')->assertStatus(404);
+    }
+
+    public function test_claim_round_trips_payment_verified_at_for_equivalent_wib_and_utc_instants(): void
+    {
+        $wib = Carbon::parse('2026-10-22 13:59:27', 'Asia/Jakarta');
+
+        $cases = [
+            'wib' => ['input' => $wib->toIso8601String(), 'ref' => '730111'],
+            'utc' => ['input' => $wib->copy()->setTimezone('UTC')->toIso8601String(), 'ref' => '730112'],
+        ];
+
+        foreach ($cases as $label => $case) {
+            $orderId = 'MTH-TZ-'.strtoupper($label);
+            $email = "tz-{$label}@gmail.com";
+            NetflixAccount::create(['email' => $email, 'password' => 'p', 'status' => 'ready']);
+
+            $this->withHeaders($this->headers())->postJson('/api/internal/netflix/reservations', [
+                'order_id' => $orderId,
+                'package_id' => '1p1u_1m',
+                'buyer_reference' => $case['ref'],
+            ])->assertStatus(201);
+
+            $claim = $this->withHeaders($this->headers())->postJson('/api/internal/netflix/claim', [
+                'order_id' => $orderId,
+                'payment_reference' => 'PAY-TZ-'.$label,
+                'amount' => 30000,
+                'currency' => 'IDR',
+                'verified_at' => $case['input'],
+            ]);
+            $claim->assertStatus(200)->assertJson(['data' => ['status' => 'completed']]);
+
+            // Instant yang dikembalikan harus instant yang sama dengan yang dikirim,
+            // apa pun offset pada input (WIB dan UTC ekuivalen).
+            $this->assertSame(
+                $wib->getTimestamp(),
+                Carbon::parse($claim->json('data.payment.verified_at'))->getTimestamp(),
+                "claim mengembalikan instant yang bergeser untuk input {$label}"
+            );
+
+            $replay = $this->withHeaders($this->headers())->postJson('/api/internal/netflix/claim', [
+                'order_id' => $orderId,
+                'payment_reference' => 'PAY-TZ-'.$label,
+                'amount' => 30000,
+                'currency' => 'IDR',
+                'verified_at' => $case['input'],
+            ]);
+            $replay->assertStatus(200)->assertJson(['duplicated' => true]);
+            $this->assertSame($claim->json('data.payment.verified_at'), $replay->json('data.payment.verified_at'));
+
+            $inquiry = $this->withHeaders($this->headers())->getJson('/api/internal/netflix/orders/'.$orderId);
+            $inquiry->assertStatus(200)->assertJson([
+                'data' => ['status' => 'completed', 'account' => ['email' => $email]],
+            ]);
+            $this->assertSame($claim->json('data.payment.verified_at'), $inquiry->json('data.payment.verified_at'));
+        }
+    }
+
+    public function test_claim_verified_at_round_trips_across_date_rollover(): void
+    {
+        $cases = [
+            // 06:30 WIB = 23:30 UTC hari sebelumnya.
+            ['wall' => '2026-10-22 06:30:00', 'expected' => '2026-10-22T06:30:00+07:00', 'ref' => '730221'],
+            // 23:45 WIB = 16:45 UTC hari yang sama.
+            ['wall' => '2026-10-22 23:45:00', 'expected' => '2026-10-22T23:45:00+07:00', 'ref' => '730222'],
+        ];
+
+        foreach ($cases as $i => $case) {
+            $orderId = 'MTH-TZ-ROLL-'.($i + 1);
+            NetflixAccount::create(['email' => "roll{$i}@gmail.com", 'password' => 'p', 'status' => 'ready']);
+
+            $this->withHeaders($this->headers())->postJson('/api/internal/netflix/reservations', [
+                'order_id' => $orderId,
+                'package_id' => '1p1u_1m',
+                'buyer_reference' => $case['ref'],
+            ])->assertStatus(201);
+
+            $claim = $this->withHeaders($this->headers())->postJson('/api/internal/netflix/claim', [
+                'order_id' => $orderId,
+                'payment_reference' => 'PAY-ROLL-'.$i,
+                'amount' => 30000,
+                'currency' => 'IDR',
+                'verified_at' => Carbon::parse($case['wall'], 'Asia/Jakarta')->toIso8601String(),
+            ]);
+            $claim->assertStatus(200);
+
+            // Tanggal WIB tidak boleh bergeser karena rollover tengah malam UTC.
+            $this->assertSame($case['expected'], $claim->json('data.payment.verified_at'));
+        }
+    }
+
+    public function test_legacy_verified_at_rows_are_not_double_shifted(): void
+    {
+        $acc = NetflixAccount::create(['email' => 'legacy@gmail.com', 'password' => 'p', 'status' => 'ready']);
+
+        $this->withHeaders($this->headers())->postJson('/api/internal/netflix/reservations', [
+            'order_id' => 'MTH-LEGACY-001',
+            'package_id' => '1p1u_1m',
+            'buyer_reference' => '730331',
+        ])->assertStatus(201);
+
+        // Baris era-bug: kolom menyimpan wall clock UTC (06:59:27 untuk 13:59:27 WIB).
+        DB::table('netflix_partner_orders')->where('order_id', 'MTH-LEGACY-001')->update([
+            'status' => 'completed',
+            'payment_reference' => 'PAY-LEGACY',
+            'payment_amount' => 30000,
+            'payment_currency' => 'IDR',
+            'verified_at' => '2026-10-22 06:59:27',
+        ]);
+        DB::table('netflix_accounts')->where('id', $acc->id)->update(['status' => 'sold']);
+
+        $inquiry = $this->withHeaders($this->headers())->getJson('/api/internal/netflix/orders/MTH-LEGACY-001');
+        $inquiry->assertStatus(200);
+
+        // Serializer tetap konversi murni saat baca: baris lama tidak boleh digeser
+        // ulang. Koreksi baris lama = backfill +7 jam, bukan perubahan sisi baca.
+        $this->assertSame('2026-10-22T06:59:27+07:00', $inquiry->json('data.payment.verified_at'));
     }
 }

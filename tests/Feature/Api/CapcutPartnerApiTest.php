@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\CapcutAccount;
 use App\Models\CapcutPartnerOrder;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -155,12 +156,60 @@ class CapcutPartnerApiTest extends TestCase
 
         $res = $this->withHeaders($this->headers())->getJson('/api/internal/capcut/orders/CPCT-INQ-001');
         $res->assertStatus(200)
-            ->assertJson([
-                'status' => 'success',
-                'data' => [
-                    'order_id' => 'CPCT-INQ-001',
-                    'status' => 'reserved',
-                ],
-            ]);
-    }
-}
+        ->assertJson([
+            'status' => 'success',
+            'data' => [
+                'order_id' => 'CPCT-INQ-001',
+                'status' => 'reserved',
+            ],
+        ]);
+        }
+
+        public function test_claim_verified_at_round_trips_wib_utc_replay_and_get(): void
+        {
+        // 06:30 WIB = 23:30 UTC hari sebelumnya: sekaligus menguji rollover tanggal.
+        $wib = Carbon::parse('2026-10-22 06:30:00', 'Asia/Jakarta');
+        $payload = fn (string $input): array => [
+        'order_id' => '',
+        'payment_reference' => '',
+        'amount' => 25000,
+        'currency' => 'IDR',
+        'verified_at' => $input,
+        ];
+
+        foreach (['wib' => $wib, 'utc' => $wib->copy()->setTimezone('UTC')] as $label => $input) {
+        $orderId = 'CPCT-TZ-'.strtoupper($label);
+        $email = "tz-{$label}@capcut.com";
+        CapcutAccount::create(['email' => $email, 'password' => 'p', 'status' => 'ready']);
+
+        $this->withHeaders($this->headers())->postJson('/api/internal/capcut/reservations', [
+            'order_id' => $orderId,
+            'package_id' => '1m',
+            'buyer_reference' => '7301'.$label,
+        ])->assertStatus(201);
+
+        $body = $payload($input->toIso8601String());
+        $body['order_id'] = $orderId;
+        $body['payment_reference'] = 'PAY-CPCT-TZ-'.$label;
+
+        $claim = $this->withHeaders($this->headers())->postJson('/api/internal/capcut/claim', $body);
+        $claim->assertStatus(200)->assertJson(['data' => ['status' => 'completed']]);
+
+        $this->assertSame(
+            $wib->getTimestamp(),
+            Carbon::parse($claim->json('data.payment.verified_at'))->getTimestamp(),
+            "claim mengembalikan instant yang bergeser untuk input {$label}"
+        );
+
+        $replay = $this->withHeaders($this->headers())->postJson('/api/internal/capcut/claim', $body);
+        $replay->assertStatus(200)->assertJson(['duplicated' => true]);
+        $this->assertSame($claim->json('data.payment.verified_at'), $replay->json('data.payment.verified_at'));
+
+        $inquiry = $this->withHeaders($this->headers())->getJson('/api/internal/capcut/orders/'.$orderId);
+        $inquiry->assertStatus(200)->assertJson([
+            'data' => ['status' => 'completed', 'account' => ['email' => $email]],
+        ]);
+        $this->assertSame($claim->json('data.payment.verified_at'), $inquiry->json('data.payment.verified_at'));
+        }
+        }
+        }
