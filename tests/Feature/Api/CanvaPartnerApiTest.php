@@ -178,7 +178,7 @@ class CanvaPartnerApiTest extends TestCase
         $this->withHeaders($this->headers())->postJson('/api/internal/canva/reservations', [
             'order_id' => $orderId,
             'package_id' => '1m',
-            'buyer_reference' => '7302'.$label,
+            'buyer_reference' => '7302' . ($label === 'wib' ? '1' : '2'),
         ])->assertStatus(201);
 
         $body = [

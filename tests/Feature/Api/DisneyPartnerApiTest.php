@@ -213,7 +213,7 @@ class DisneyPartnerApiTest extends TestCase
         $this->withHeaders($this->headers())->postJson('/api/internal/disney/reservations', [
             'order_id' => $orderId,
             'package_id' => '1p1u_1m',
-            'buyer_reference' => '7303'.$label,
+            'buyer_reference' => '7303' . ($label === 'wib' ? '1' : '2'),
         ])->assertStatus(201);
 
         $body = [

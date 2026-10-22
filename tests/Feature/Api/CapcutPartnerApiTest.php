@@ -185,7 +185,7 @@ class CapcutPartnerApiTest extends TestCase
         $this->withHeaders($this->headers())->postJson('/api/internal/capcut/reservations', [
             'order_id' => $orderId,
             'package_id' => '1m',
-            'buyer_reference' => '7301'.$label,
+            'buyer_reference' => '7301' . ($label === 'wib' ? '1' : '2'),
         ])->assertStatus(201);
 
         $body = $payload($input->toIso8601String());
