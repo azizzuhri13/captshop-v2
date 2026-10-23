@@ -17,6 +17,26 @@ class OrderServiceTest extends TestCase
 {
     use RefreshDatabase, WithFaker;
 
+    /** Checkout DigiFlazz butuh pricelist segar; fixture ini yang menyediakannya. */
+    private function fakeFreshCatalog(string $sku): void
+    {
+        $path = storage_path('framework/testing/digiflazz-'.uniqid().'.json');
+        config(['supplier.digiflazz.pricelist.cache_path' => $path]);
+        @mkdir(dirname($path), 0775, true);
+        file_put_contents($path, json_encode([
+            'version' => 1,
+            'fetched_at' => now()->toIso8601String(),
+            'count' => 1,
+            'items' => [[
+                'buyer_sku_code' => $sku,
+                'price' => 13000,
+                'buyer_product_status' => true,
+                'seller_product_status' => true,
+                'seller_name' => 'GAMEPEDIA',
+            ]],
+        ]));
+    }
+
     protected function seedOrderFixture(): array
     {
         $channel = PaymentChannel::create([
@@ -51,6 +71,8 @@ class OrderServiceTest extends TestCase
             'sell_price' => '15000',
             'is_active' => true,
         ]);
+
+        $this->fakeFreshCatalog('ml-86');
 
         return [$channel, $product, $item];
     }

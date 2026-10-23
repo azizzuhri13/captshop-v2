@@ -1,11 +1,8 @@
 <?php
 
-use App\Models\ProductItem;
 use App\Models\Transaction;
 use App\Services\Notification\NotificationService;
-use App\Services\Supplier\DigiflazzClient;
 use App\Services\Supplier\DigiflazzService;
-use App\Support\Credentials;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -95,62 +92,18 @@ Artisan::command('orders:reconcile', function () {
     }
 })->purpose('Cek status transaksi processing yang tertunda ke supplier');
 
+/*
+| Alias lama `supplier:sync-prices` (dipakai manual / cron lama) kini hanya
+| meneruskan ke command utama. Implementasi duplikat sebelumnya menulis katalog
+| tanpa pengaman kesegaran data dan tanpa membatasi item milik supplier lain,
+| jadi jalur itu dihapus supaya hanya ada satu sumber kebenaran.
+*/
 Artisan::command('supplier:sync-prices', function () {
-    $client = app(DigiflazzClient::class);
-    $user = (string) Credentials::get('digiflazz_username', config('supplier.digiflazz.username'));
-    $key = (string) Credentials::get('digiflazz_api_key', config('supplier.digiflazz.api_key'));
+    $this->warn('supplier:sync-prices sudah digabung ke supplier:sync-digiflazz (fail-closed).');
 
-    if (empty($user) || empty($key)) {
-        $this->error('Kredensial DigiFlazz belum disetel.');
-        return;
-    }
+    return $this->call('supplier:sync-digiflazz');
+})->purpose('Alias lama: diteruskan ke supplier:sync-digiflazz');
 
-    try {
-        $res = $client->post('/price-list', [
-            'cmd' => 'pre-paid',
-            'username' => $user,
-            'sign' => md5($user . $key . 'pricelist'),
-        ]);
-
-        $items = $res['data'] ?? [];
-        if (empty($items)) {
-            $this->warn('Tidak ada data produk dari DigiFlazz.');
-            return;
-        }
-
-        $priceMap = [];
-        foreach ($items as $item) {
-            if (!empty($item['buyer_sku_code'])) {
-                $priceMap[$item['buyer_sku_code']] = $item;
-            }
-        }
-
-        $productItems = ProductItem::whereNotNull('supplier_item_code')->get();
-        $updated = 0;
-
-        foreach ($productItems as $pItem) {
-            $sku = $pItem->supplier_item_code;
-            if (isset($priceMap[$sku])) {
-                $upstream = $priceMap[$sku];
-                $buyPrice = (float) ($upstream['price'] ?? 0);
-                if ($buyPrice > 0) {
-                    $sellPrice = ceil(($buyPrice * 1.07) / 100) * 100;
-                    $isActive = ($upstream['buyer_product_status'] ?? true) && ($upstream['seller_product_status'] ?? true);
-                    $pItem->update([
-                        'buy_price' => $buyPrice,
-                        'sell_price' => $sellPrice,
-                        'is_active' => $isActive,
-                    ]);
-                    $updated++;
-                }
-            }
-        }
-
-        $this->info("Sync selesai: {$updated} item diperbarui dengan margin 7%.");
-    } catch (\Throwable $e) {
-        $this->error('Sync DigiFlazz gagal: ' . $e->getMessage());
-    }
-})->purpose('Sinkronisasi harga beli dan jual dari supplier DigiFlazz');
 
 Schedule::command('orders:expire')->everyMinute();
 Schedule::command('orders:reconcile')->everyFiveMinutes()->withoutOverlapping();

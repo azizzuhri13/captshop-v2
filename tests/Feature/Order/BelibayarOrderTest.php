@@ -16,6 +16,26 @@ class BelibayarOrderTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** Checkout DigiFlazz butuh pricelist segar; fixture ini yang menyediakannya. */
+    private function fakeFreshCatalog(string $sku): void
+    {
+        $path = storage_path('framework/testing/digiflazz-'.uniqid().'.json');
+        config(['supplier.digiflazz.pricelist.cache_path' => $path]);
+        @mkdir(dirname($path), 0775, true);
+        file_put_contents($path, json_encode([
+            'version' => 1,
+            'fetched_at' => now()->toIso8601String(),
+            'count' => 1,
+            'items' => [[
+                'buyer_sku_code' => $sku,
+                'price' => 10000,
+                'buyer_product_status' => true,
+                'seller_product_status' => true,
+                'seller_name' => 'GAMEPEDIA',
+            ]],
+        ]));
+    }
+
     public function test_unpayable_gateway_response_rolls_back_order(): void
     {
         config()->set('payment.default', 'belibayar');
@@ -68,7 +88,8 @@ class BelibayarOrderTest extends TestCase
         PaymentChannel::create(['gateway'=>'belibayar','code'=>'QRIS','name'=>'QRIS','group'=>'QRIS','flat_fee'=>'0','percent_fee'=>'0','is_active'=>true]);
         $cat = Category::create(['name'=>'Games','slug'=>'games']);
         $product = Product::create(['category_id'=>$cat->id,'name'=>'Voucher','slug'=>'voucher','supplier_type'=>'digiflazz']);
-        $item = ProductItem::create(['product_id'=>$product->id,'name'=>'10 gems','buy_price'=>'10000','sell_price'=>'15000','is_active'=>true]);
+        $item = ProductItem::create(['product_id'=>$product->id,'name'=>'10 gems','supplier_item_code'=>'ml-10','buy_price'=>'10000','sell_price'=>'15000','is_active'=>true]);
+        $this->fakeFreshCatalog('ml-10');
         $client = Mockery::mock(BelibayarClient::class);
         $client->shouldReceive('charge')->once()->andReturnUsing(function ($payload) {
             return ['reference'=>$payload['reference'],'transaction_id'=>'byrtrx_new','status'=>'pending','payment_channel'=>'QRIS','amount'=>$payload['amount'],'qr_content'=>'000201TEST','qr_url'=>'https://link.belibayar.id/test.png','expired_at'=>now()->addMinutes(35)->timestamp];

@@ -8,6 +8,7 @@ use App\Models\ProductItem;
 use App\Models\Transaction;
 use App\Services\Payment\PaymentException;
 use App\Services\Payment\PaymentGatewayInterface;
+use App\Support\DigiflazzCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -46,6 +47,14 @@ class OrderService
 
         if ($item->isOutOfStock()) {
             throw new \InvalidArgumentException('Maaf, stok untuk paket '.$item->name.' sedang habis.');
+        }
+
+        // Checkout DigiFlazz hanya boleh jalan di atas pricelist segar yang
+        // menyatakan SKU persis ini tersedia; status aktif di DB saja bisa
+        // tertinggal dari kenyataan supplier.
+        if ($item->product?->supplier_type === 'digiflazz'
+            && ! DigiflazzCatalog::isAvailableRow(DigiflazzCatalog::freshRow((string) $item->supplier_item_code))) {
+            throw new \InvalidArgumentException('Katalog DigiFlazz belum sinkron atau paket ini sedang tidak tersedia. Coba beberapa saat lagi.');
         }
 
         $channel = PaymentChannel::query()
