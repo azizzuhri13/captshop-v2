@@ -105,6 +105,24 @@ class SettingController extends Controller
             'settings.*' => ['nullable', 'string', 'max:1000'],
             'clear_settings' => ['nullable', 'array'],
             'clear_settings.*' => ['boolean'],
+            // Kode merchant Belibayar berformat BYR + 6 karakter (mis. BYR670455).
+            // Validasi hanya untuk nilai baru agar nilai lama yang salah ketik
+            // tidak memblokir penyimpanan setting lain; perbaikannya tetap dipaksa
+            // saat field ini diubah.
+            'settings.belibayar_merchant_id' => [
+                'nullable', 'string',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $value = trim((string) $value);
+
+                    if ($value === '' || $value === SiteSetting::get('belibayar_merchant_id')) {
+                        return;
+                    }
+
+                    if (! preg_match('/^BYR[A-Z0-9]{6}$/', $value)) {
+                        $fail('Belibayar Merchant ID harus berformat BYR diikuti 6 karakter, misalnya BYR670455.');
+                    }
+                },
+            ],
             // Rule `image` Laravel tidak mengenali .ico, jadi validasi mime
             // dilakukan eksplisit agar favicon .ico tetap diterima. SVG dilarang untuk mencegah Stored XSS.
             'site_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp,ico', 'max:2048'],

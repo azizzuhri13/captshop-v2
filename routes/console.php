@@ -154,7 +154,106 @@ Artisan::command('supplier:sync-prices', function () {
 
 Schedule::command('orders:expire')->everyMinute();
 Schedule::command('orders:reconcile')->everyFiveMinutes()->withoutOverlapping();
+Schedule::command('payments:reconcile')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('supplier:sync-digiflazz')->everyTwoHours()->withoutOverlapping();
+
+Artisan::command('payments:reconcile', function () {
+    // Jaring pengaman pembayaran: webhook Belibayar bisa hilang, ditolak, atau
+    // datang terlambat. Status provider adalah sumber kebenaran, jadi transaksi
+    // yang masih pending/expired ditanyakan langsung ke gateway.
+    $lock = \Illuminate\Support\Facades\Cache::lock('command:payments:reconcile', 300);
+    if (! $lock->get()) {
+        $this->warn('Rekonsiliasi pembayaran sedang berjalan di proses lain.');
+
+        return;
+    }
+
+    try {
+        $client = app(\App\Services\Payment\BelibayarClient::class);
+        $transactions = Transaction::where('payment_gateway', 'belibayar')
+            ->whereIn('status', ['pending', 'expired'])
+            ->whereNotNull('payment_ref')
+            ->where('created_at', '<=', now()->subMinutes(2))
+            // Konfirmasi terlambat masih diterima hingga 7 hari setelah kedaluwarsa.
+            ->where(function ($q) {
+                $q->whereNull('expired_at')->orWhere('expired_at', '>=', now()->subDays(7));
+            })
+            ->orderBy('id')
+            ->limit(50)
+            ->get();
+
+        $this->info("Memeriksa {$transactions->count()} transaksi Belibayar yang belum final...");
+        $recovered = 0;
+
+        foreach ($transactions as $trx) {
+            try {
+                $data = $client->status((string) $trx->payment_ref);
+            } catch (\Throwable $e) {
+                $this->error("Status {$trx->invoice_id} gagal: {$e->getMessage()}");
+
+                continue;
+            }
+
+            $status = $data['status'] ?? null;
+
+            if ($status === 'paid') {
+                $amount = $data['amount'] ?? null;
+                $paymentId = (string) ($data['transaction_id'] ?? '');
+                $channel = $data['payment_channel'] ?? null;
+                $matches = is_numeric($amount)
+                    && (int) $amount === (int) $trx->total
+                    && $paymentId === (string) $trx->payment_ref
+                    && ($channel === null || strcasecmp((string) $channel, (string) $trx->payment_channel) === 0);
+
+                if (! $matches) {
+                    \Illuminate\Support\Facades\Log::warning('Rekonsiliasi Belibayar: provider paid tetapi data tidak cocok; tidak diproses.', [
+                        'invoice_id' => $trx->invoice_id,
+                        'local_total' => (int) $trx->total,
+                        'provider_amount' => $amount,
+                        'local_ref' => $trx->payment_ref,
+                        'provider_ref' => $paymentId,
+                        'local_channel' => $trx->payment_channel,
+                        'provider_channel' => $channel,
+                    ]);
+                    $this->warn("{$trx->invoice_id}: provider paid tetapi data tidak cocok; dilewati.");
+
+                    continue;
+                }
+
+                $toFulfill = \Illuminate\Support\Facades\DB::transaction(function () use ($trx) {
+                    $locked = Transaction::whereKey($trx->id)->lockForUpdate()->first();
+                    if (! $locked || ! in_array($locked->status, ['pending', 'expired'], true)) {
+                        return null;
+                    }
+
+                    $locked->forceFill([
+                        'status' => 'paid',
+                        'paid_at' => $locked->paid_at ?? now(),
+                    ])->save();
+
+                    return $locked->id;
+                });
+
+                if ($toFulfill !== null) {
+                    app(\App\Services\FulfillmentService::class)->fulfill(Transaction::findOrFail($toFulfill));
+                    $recovered++;
+                    $this->info("{$trx->invoice_id}: dibayar — dipulihkan lewat rekonsiliasi.");
+                }
+
+                continue;
+            }
+
+            if (in_array($status, ['expired', 'cancelled'], true) && $trx->status === 'pending') {
+                $trx->forceFill(['status' => 'expired'])->save();
+                $this->line("{$trx->invoice_id}: ditandai expired sesuai provider.");
+            }
+        }
+
+        $this->info("Selesai. Transaksi dipulihkan: {$recovered}.");
+    } finally {
+        $lock->release();
+    }
+})->purpose('Rekonsiliasi status pembayaran Belibayar langsung ke gateway (jaring pengaman webhook)');
 
 Artisan::command('supplier:check-balance', function () {
     try {

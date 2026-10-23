@@ -45,7 +45,10 @@ class BelibayarController extends Controller
         }
         // merchant_id bukan bukti keaslian: signature atas raw body sudah mengikat pengirim.
         if (isset($payload['merchant_id']) && $payload['merchant_id'] !== $merchantId) {
-            Log::warning('Webhook Belibayar merchant_id tidak cocok dengan konfigurasi; diabaikan.');
+            Log::warning('Webhook Belibayar merchant_id tidak cocok dengan konfigurasi; diabaikan.', [
+                'payload_merchant_id' => $this->maskCode((string) $payload['merchant_id']),
+                'configured_merchant_id' => $this->maskCode((string) $merchantId),
+            ]);
         }
         $toFulfill = DB::transaction(function () use ($payload, $reference, $paymentId, $status) {
             $transaction = Transaction::query()->where('invoice_id', $reference)->lockForUpdate()->first();
@@ -128,6 +131,23 @@ class BelibayarController extends Controller
     }
 
     /**
+     * Samarkan kode merchant pada log: cukup untuk mencocokkan dengan dasbor
+     * tanpa menuliskan nilai lengkap ke berkas log.
+     */
+    protected function maskCode(string $value): string
+    {
+        if ($value === '') {
+            return '[kosong]';
+        }
+
+        $len = strlen($value);
+
+        return $len <= 5
+            ? str_repeat('*', $len)."(len={$len})"
+            : substr($value, 0, 3).'***'.substr($value, -2)."(len={$len})";
+    }
+
+    /**
      * Catat penolakan webhook beserta ringkasan payload (tanpa PII/kredensial)
      * agar kegagalan berulang bisa didiagnosa tanpa menebak.
      */
@@ -153,5 +173,21 @@ class BelibayarController extends Controller
             'reason' => $reason,
             'payload' => $summary,
         ]);
+
+        // Notifikasi "paid" yang ditolak berarti uang pelanggan sudah masuk tetapi
+        // pesanan tidak diproses. Ini kerugian nyata, jadi jangan hanya masuk log.
+        if (($decoded['status'] ?? null) === 'paid') {
+            try {
+                app(\App\Services\Notification\TelegramAlertService::class)->send(
+                    "🚨 <b>[WEBHOOK BELIBAYAR DITOLAK]</b>\n"
+                    .'Alasan: <code>'.e($reason)."</code>\n"
+                    .'Invoice: <code>'.e((string) ($decoded['reference'] ?? '-'))."</code>\n"
+                    .'Nominal: Rp '.number_format((int) ($decoded['amount'] ?? 0), 0, ',', '.')."\n"
+                    .'Pembayaran sudah masuk di provider. Jalankan <code>php artisan payments:reconcile</code> untuk memulihkan pesanan.'
+                );
+            } catch (\Throwable $e) {
+                Log::error('Gagal mengirim alert penolakan webhook Belibayar: '.$e->getMessage());
+            }
+        }
     }
 }
