@@ -125,7 +125,7 @@
                                     <span>🤖 Telegram</span>
                                 </div>
                                 <p class="text-[10px] text-slate-500 mt-0.5">{{ $acc->sold_at?->translatedFormat('d M Y H:i') }}</p>
-                            @elseif ($acc->transaction || $acc->channel === 'web')
+                            @elseif ($acc->transaction)
                                 <div class="flex items-center gap-1.5 flex-wrap">
                                     <span class="inline-flex items-center gap-1 rounded bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
                                         🌐 Web

@@ -39,6 +39,27 @@ class CapcutAccountManagementTest extends TestCase
         $response->assertSee('ready@capcut.com');
     }
 
+    public function test_ready_web_stock_without_transaction_shows_no_related_transaction(): void
+    {
+        $admin = $this->createSuperAdmin();
+
+        CapcutAccount::create([
+            'email' => 'unlinked@capcut.com',
+            'password' => 'capcut123',
+            'status' => 'ready',
+            'channel' => 'web',
+            'transaction_id' => null,
+        ]);
+
+        $response = $this->actingAs($admin, 'admin')->get(route('admin.capcut-accounts.index'));
+
+        $response->assertStatus(200);
+        $response->assertSee('unlinked@capcut.com');
+        $response->assertSee('—');
+        $response->assertDontSee('🌐 Web');
+        $response->assertDontSee('INV-CAPCUT-UNLINKED');
+    }
+
     public function test_admin_can_store_capcut_account(): void
     {
         $admin = $this->createSuperAdmin();
