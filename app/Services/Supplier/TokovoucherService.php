@@ -21,7 +21,7 @@ class TokovoucherService implements SupplierInterface
         $product = $transaction->productItem?->product;
 
         if ($product === null || empty($transaction->productItem?->supplier_item_code)) {
-            throw SupplierException::requestFailed('Produk/item belum terpetakan ke SKU supplier Tokovoucher.');
+            throw SupplierException::mappingError('Produk/item belum terpetakan ke SKU supplier Tokovoucher.');
         }
 
         $refId = $transaction->invoice_id;
@@ -29,6 +29,10 @@ class TokovoucherService implements SupplierInterface
         $secret = $this->secretKey();
 
         [$tujuan, $serverId] = $this->resolveDestination($data);
+
+        if (trim($tujuan) === '') {
+            throw SupplierException::mappingError('Data tujuan pelanggan kosong; order tidak dikirim ke supplier.');
+        }
 
         $payload = [
             'ref_id' => $refId,

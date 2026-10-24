@@ -89,9 +89,13 @@ class DigiflazzController extends Controller
 
                 $transaction = $trx;
             } elseif ($statusStr === 'gagal' || $statusStr === 'failed') {
+                // Supplier menyatakan gagal: final, ditahan untuk tindakan admin
+                // supaya tidak dikirim ulang ke supplier oleh scheduler.
                 $trx->forceFill([
                     'status' => 'failed',
                     'supplier_response' => json_encode($data),
+                    'needs_manual_review' => true,
+                    'manual_review_reason' => 'DigiFlazz menyatakan transaksi gagal: '.trim((string) ($data['message'] ?? 'tanpa keterangan')),
                 ])->save();
 
                 try {

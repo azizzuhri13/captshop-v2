@@ -60,6 +60,7 @@ class BelibayarWebhookTest extends TestCase
     public function test_accepts_signed_paid_webhook_when_merchant_id_differs_or_is_omitted(): void
     {
         $supplier = $this->mock(SupplierInterface::class);
+        $supplier->shouldReceive('supplierName')->andReturn('digiflazz');
         $supplier->shouldReceive('topup')->twice()->andReturn(['supplier_ref' => 'DF-1', 'supplier_sn' => 'SN-1', 'status' => 'completed', 'raw' => []]);
         $this->app->instance(SupplierInterface::class, $supplier);
 
@@ -88,6 +89,7 @@ class BelibayarWebhookTest extends TestCase
     {
         $transaction = $this->transaction();
         $supplier = $this->mock(SupplierInterface::class);
+        $supplier->shouldReceive('supplierName')->andReturn('digiflazz');
         $supplier->shouldReceive('topup')->once()->andReturn(['supplier_ref' => 'DF-1', 'supplier_sn' => 'SN-1', 'status' => 'completed', 'raw' => []]);
         $this->app->instance(SupplierInterface::class, $supplier);
         $this->notify($this->payload('paid'))->assertOk();
@@ -99,6 +101,7 @@ class BelibayarWebhookTest extends TestCase
     {
         $transaction = $this->transaction();
         $supplier = $this->mock(SupplierInterface::class);
+        $supplier->shouldReceive('supplierName')->andReturn('digiflazz');
         $supplier->shouldReceive('topup')->once()->andReturn(['supplier_ref' => 'DF-1', 'supplier_sn' => 'SN-1', 'status' => 'completed', 'raw' => []]);
         $this->app->instance(SupplierInterface::class, $supplier);
         $this->notify($this->payload('expired'))->assertOk();

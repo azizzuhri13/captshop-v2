@@ -15,6 +15,20 @@
                     </div>
                 </div>
 
+                @if ($transaction->needs_manual_review)
+                    <div class="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                        <p class="font-semibold text-amber-200">⚠️ Ditahan untuk tindakan admin — retry otomatis dihentikan</p>
+                        <p class="mt-1 text-amber-200/90">{{ $transaction->manual_review_reason ?? 'Order ini butuh tindakan manual.' }}</p>
+                        <p class="mt-1 text-xs text-amber-200/70">
+                            Supplier: {{ $transaction->supplier_name ?? '—' }}
+                            · Percobaan otomatis: {{ (int) $transaction->supplier_attempts }}
+                            @if ($transaction->supplier_last_attempt_at)
+                                · Percobaan terakhir: {{ $transaction->supplier_last_attempt_at->format('d/m/Y H:i') }}
+                            @endif
+                        </p>
+                    </div>
+                @endif
+
                 <dl class="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
                     <div class="flex justify-between gap-4">
                         <dt class="text-slate-500">Produk</dt>
@@ -143,6 +157,7 @@
 
             <div class="rounded-xl border border-slate-800 bg-slate-800/40 p-5 text-xs text-slate-500">
                 <p>Gunakan <b>Retry Fulfillment</b> bila pembayaran sudah masuk namun top-up gagal/stuck di supplier. <b>Mark as Completed</b> hanya untuk penyelesaian manual setelah verifikasi CS.</p>
+                <p class="mt-2">Transaksi yang <b>ditahan untuk tindakan admin</b> berhenti dikirim otomatis ke supplier. Retry Fulfillment akan membuka penahan itu dan mengirim sekali lagi ke supplier.</p>
             </div>
         </div>
     </div>

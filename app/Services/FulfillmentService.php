@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Transaction;
 use App\Services\Notification\NotificationService;
+use App\Services\Notification\TelegramAlertService;
 use App\Services\Supplier\SupplierException;
 use App\Services\Supplier\SupplierInterface;
 use App\Services\Supplier\TokovoucherService;
@@ -16,6 +17,123 @@ class FulfillmentService
         protected NotificationService $notifications,
     ) {}
 
+    /*
+    |--------------------------------------------------------------------------
+    | Guard fulfillment supplier
+    |--------------------------------------------------------------------------
+    |
+    | Fulfillment otomatis tidak boleh mengirim ulang transaksi tanpa batas.
+    | Dua penahan: (1) supplier menyatakan gagal final (tidak akan berubah
+    | walau diulang) dan (2) jumlah percobaan otomatis sudah mencapai batas.
+    | Order yang ditahan diberi flag `needs_manual_review` supaya scheduler
+    | berhenti dan admin menindaklanjuti (refund / fulfillment manual).
+    |
+    */
+
+    /** Batas percobaan otomatis sebelum order ditahan untuk admin. */
+    public function maxAttempts(): int
+    {
+        return max(1, (int) config('supplier.max_attempts', 3));
+    }
+
+    /** Jeda minimum (menit) sebelum percobaan otomatis berikutnya. */
+    public function backoffMinutesFor(int $attempt): int
+    {
+        $schedule = array_values(array_filter((array) config('supplier.retry_backoff_minutes', [5, 15, 60]), 'is_numeric'));
+
+        if ($schedule === []) {
+            return 0;
+        }
+
+        $index = min(max($attempt, 1), count($schedule)) - 1;
+
+        return (int) $schedule[$index];
+    }
+
+    /** Order ditahan untuk tindakan admin? */
+    public function needsManualReview(Transaction $transaction): bool
+    {
+        return (bool) $transaction->needs_manual_review;
+    }
+
+    /** Jumlah percobaan otomatis sudah mencapai batas? */
+    public function attemptsExhausted(Transaction $transaction): bool
+    {
+        return (int) $transaction->supplier_attempts >= $this->maxAttempts();
+    }
+
+    /**
+     * Boleh dikirim ke supplier sekarang? Menghormati penahanan admin dan
+     * jeda (backoff) antar percobaan.
+     */
+    public function canAttemptNow(Transaction $transaction): bool
+    {
+        if ($this->needsManualReview($transaction) || $this->attemptsExhausted($transaction)) {
+            return false;
+        }
+
+        $last = $transaction->supplier_last_attempt_at;
+
+        if ($last === null) {
+            return true;
+        }
+
+        return $last->addMinutes($this->backoffMinutesFor((int) $transaction->supplier_attempts))->isPast();
+    }
+
+    /**
+     * Catat percobaan kirim ke supplier SEBELUM request dikirim, supaya
+     * kegagalan jaringan/crash pun tetap terhitung.
+     */
+    public function recordAttempt(Transaction $transaction, string $supplierName): void
+    {
+        $transaction->forceFill([
+            'supplier_name' => $supplierName,
+            'supplier_attempts' => (int) $transaction->supplier_attempts + 1,
+            'supplier_last_attempt_at' => now(),
+        ])->save();
+    }
+
+    /**
+     * Tahan order untuk tindakan admin: status final + flag manual review,
+     * sehingga tidak dikirim ulang ke supplier oleh scheduler mana pun.
+     */
+    public function holdForManualReview(Transaction $transaction, string $reason, string $status = 'failed'): Transaction
+    {
+        $transaction->forceFill([
+            'status' => $status,
+            'needs_manual_review' => true,
+            'manual_review_reason' => $reason,
+            'supplier_response' => json_encode(['error' => $reason]),
+        ])->save();
+
+        try {
+            app(TelegramAlertService::class)->alertFulfillmentFailed($transaction, $reason);
+        } catch (\Throwable) {}
+
+        return $transaction;
+    }
+
+    /**
+     * Coba ulang secara manual (dipicu admin): buka penahan guard, lalu
+     * jalankan fulfillment sekali lagi.
+     *
+     * Tindakan manusia yang eksplisit boleh mengulang order yang sudah ditahan
+     * (mis. setelah SKU diperbaiki atau restock), sedangkan percobaan otomatis
+     * tetap dibatasi supaya tidak kembali jadi retry tanpa batas.
+     */
+    public function retryManually(Transaction $transaction): Transaction
+    {
+        $transaction->forceFill([
+            'status' => $transaction->status === 'failed' ? 'processing' : $transaction->status,
+            'needs_manual_review' => false,
+            'manual_review_reason' => null,
+            'supplier_attempts' => 0,
+        ])->save();
+
+        return $this->fulfill($transaction);
+    }
+
     /**
      * Proses fulfillment pesanan yang sudah dibayar: kirim notifikasi paid,
      * panggil supplier top-up, simpan response, lalu kirim notifikasi
@@ -25,6 +143,25 @@ class FulfillmentService
     {
         if (! in_array($transaction->status, ['paid', 'processing'], true)) {
             return $transaction;
+        }
+
+        // Order yang sudah ditahan untuk tindakan admin tidak boleh dikirim
+        // ulang ke supplier: mengulang transaksi yang gagal final tidak
+        // mengubah hasil dan berisiko top-up ganda ke pelanggan.
+        if ($this->needsManualReview($transaction)) {
+            Log::info('Fulfillment dilewati: order ditahan untuk tindakan admin.', [
+                'invoice_id' => $transaction->invoice_id,
+                'reason' => $transaction->manual_review_reason,
+            ]);
+
+            return $transaction;
+        }
+
+        if ($this->attemptsExhausted($transaction)) {
+            return $this->holdForManualReview($transaction, sprintf(
+                'Percobaan otomatis supplier sudah mencapai batas (%d kali).',
+                $this->maxAttempts()
+            ));
         }
 
         if ($transaction->processed_at === null) {
@@ -79,7 +216,18 @@ class FulfillmentService
 
         try {
             $supplier = $this->resolveSupplier($transaction);
+            $this->recordAttempt($transaction, $supplier->supplierName());
+
             $result = $supplier->topup($transaction, $transaction->customer_data ?? []);
+
+            if ($result['status'] === 'failed') {
+                // Supplier menyatakan gagal: hasilnya final, mengulang
+                // transaksi yang sama tidak akan berubah.
+                return $this->holdForManualReview(
+                    $transaction,
+                    'Supplier menyatakan transaksi gagal: '.trim((string) ($result['message'] ?? 'tanpa keterangan'))
+                );
+            }
 
             $status = $result['status'] === 'completed' ? 'completed' : 'processing';
 
@@ -97,13 +245,19 @@ class FulfillmentService
         } catch (SupplierException $e) {
             Log::error('Fulfillment gagal untuk '.$transaction->invoice_id.': '.$e->getMessage());
 
+            // Gagal final dari supplier (mis. rc 02 "Transaksi Gagal") atau
+            // percobaan otomatis sudah habis: tahan order, jangan di-retry lagi.
+            if (! $e->isRetryable() || $this->attemptsExhausted($transaction)) {
+                return $this->holdForManualReview($transaction, $e->getMessage());
+            }
+
             $transaction->forceFill([
                 'status' => 'processing',
                 'supplier_response' => json_encode(['error' => $e->getMessage()]),
             ])->save();
 
             try {
-                app(\App\Services\Notification\TelegramAlertService::class)->alertFulfillmentFailed($transaction, $e->getMessage());
+                app(TelegramAlertService::class)->alertFulfillmentFailed($transaction, $e->getMessage());
             } catch (\Throwable) {}
         }
 

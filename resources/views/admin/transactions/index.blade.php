@@ -57,6 +57,9 @@
                         <td class="p-3 text-secondary">Rp {{ number_format((float) $transaction->profit, 0, ',', '.') }}</td>
                         <td class="p-3">
                             <span class="rounded-full px-2 py-0.5 text-xs font-semibold {{ $transaction->statusBadgeClass() }}">{{ $transaction->status }}</span>
+                            @if ($transaction->needs_manual_review)
+                                <span class="ml-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-300" title="{{ $transaction->manual_review_reason }}">perlu tindakan</span>
+                            @endif
                         </td>
                         <td class="p-3 text-xs text-slate-500">{{ $transaction->created_at->format('d M H:i') }}</td>
                         <td class="p-3 text-right">

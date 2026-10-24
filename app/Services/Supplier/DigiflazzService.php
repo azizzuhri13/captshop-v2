@@ -18,16 +18,22 @@ class DigiflazzService implements SupplierInterface
 
     public function topup(Transaction $transaction, array $data): array
     {
-        $product = $transaction->productItem?->product;
+        $item = $transaction->productItem;
 
-        if ($product === null || empty($product->supplier_code) || empty($transaction->productItem->supplier_item_code)) {
-            throw SupplierException::requestFailed('Produk/item belum terpetakan ke SKU supplier.');
+        if ($item === null || empty($item->supplier_item_code)) {
+            throw SupplierException::mappingError('Produk/item belum terpetakan ke SKU supplier DigiFlazz.');
+        }
+
+        $customerNo = $this->resolveCustomerNo($data);
+
+        if ($customerNo === '') {
+            throw SupplierException::mappingError('Data tujuan pelanggan kosong; order tidak dikirim ke supplier.');
         }
 
         $payload = [
             'username' => $this->username(),
-            'buyer_sku_code' => $transaction->productItem->supplier_item_code,
-            'customer_no' => $this->resolveCustomerNo($data),
+            'buyer_sku_code' => $item->supplier_item_code,
+            'customer_no' => $customerNo,
             'ref_id' => $transaction->invoice_id,
             'sign' => $this->sign($transaction->invoice_id),
         ];

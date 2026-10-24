@@ -44,16 +44,23 @@ class TransactionController extends Controller
 
     /**
      * Ulangi fulfillment ke supplier (mis. transaksi stuck di processing).
+     *
+     * Admin boleh mengulang order yang sudah ditahan guard (status failed +
+     * needs_manual_review) — mis. setelah SKU dipetakan ulang atau restock —
+     * karena tindakan ini eksplisit dari manusia, bukan retry otomatis.
      */
     public function retryFulfillment(Transaction $transaction, FulfillmentService $fulfillment): RedirectResponse
     {
-        if (! in_array($transaction->status, ['paid', 'processing'], true)) {
-            return back()->with('error', 'Retry fulfillment hanya untuk transaksi berstatus paid/processing.');
+        $isRetryable = in_array($transaction->status, ['paid', 'processing'], true)
+            || ($transaction->status === 'failed' && $transaction->needs_manual_review);
+
+        if (! $isRetryable) {
+            return back()->with('error', 'Retry fulfillment hanya untuk transaksi berstatus paid/processing, atau transaksi gagal yang ditahan untuk tindakan admin.');
         }
 
         $oldStatus = $transaction->status;
 
-        $fulfillment->fulfill($transaction);
+        $fulfillment->retryManually($transaction);
 
         $newStatus = $transaction->fresh()->status;
 

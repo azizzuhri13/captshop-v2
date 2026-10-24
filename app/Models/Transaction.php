@@ -32,6 +32,11 @@ class Transaction extends Model
         'status',
         'supplier_ref',
         'supplier_sn',
+        'supplier_name',
+        'supplier_attempts',
+        'supplier_last_attempt_at',
+        'needs_manual_review',
+        'manual_review_reason',
         'supplier_response',
         'paid_at',
         'processed_at',
@@ -53,6 +58,9 @@ class Transaction extends Model
             'processed_at' => 'datetime',
             'completed_at' => 'datetime',
             'expired_at' => 'datetime',
+            'supplier_last_attempt_at' => 'datetime',
+            'supplier_attempts' => 'integer',
+            'needs_manual_review' => 'boolean',
         ];
     }
 

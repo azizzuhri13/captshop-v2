@@ -28,8 +28,14 @@ class DigiflazzClient
         if (! $response->successful()) {
             $errDetail = $response->json('data.message') ?? $response->json('message') ?? ('HTTP '.$response->status());
             $rc = $response->json('data.rc') ?? $response->json('rc') ?? $response->status();
+
+            // 5xx/429 = gangguan sementara (boleh dicoba ulang dengan backoff).
+            // 4xx = konfigurasi/permintaan salah; mengulang tidak akan menolong.
+            $retryable = $response->serverError() || $response->status() === 429;
+
             throw SupplierException::requestFailed(
-                "DigiFlazz {$endpoint} gagal ({$rc}): {$errDetail}"
+                "DigiFlazz {$endpoint} gagal ({$rc}): {$errDetail}",
+                $retryable
             );
         }
 
@@ -44,8 +50,20 @@ class DigiflazzClient
             $status = strtolower((string) $json['data']['status']);
             if (! in_array($status, ['sukses', 'pending', 'proses'], true)) {
                 $message = $json['data']['message'] ?? $json['data']['rc'] ?? 'unknown error';
+                $rc = (string) ($json['data']['rc'] ?? '');
+                $detail = is_array($message) ? json_encode($message) : (string) $message;
 
-                throw SupplierException::requestFailed('DigiFlazz '.$endpoint.' error: '.(is_array($message) ? json_encode($message) : $message));
+                // Status "gagal" dari supplier bersifat final: mengirim ulang
+                // transaksi dengan ref_id yang sama tidak akan mengubah hasil.
+                if (in_array($status, ['gagal', 'failed'], true) || $rc === '02') {
+                    throw SupplierException::terminalFailure(
+                        "DigiFlazz {$endpoint} error: {$detail}".($rc !== '' ? " (rc {$rc})" : '')
+                    );
+                }
+
+                throw SupplierException::requestFailed(
+                    "DigiFlazz {$endpoint} error: {$detail}".($rc !== '' ? " (rc {$rc})" : '')
+                );
             }
         }
 

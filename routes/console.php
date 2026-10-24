@@ -28,6 +28,7 @@ Artisan::command('orders:reconcile', function () {
 
     try {
         $transactions = Transaction::where('status', 'processing')
+            ->where('needs_manual_review', false)
             ->where('created_at', '<=', now()->subMinutes(3))
             ->whereHas('productItem.product', function ($q) {
                 $q->where(function ($sub) {
@@ -41,11 +42,32 @@ Artisan::command('orders:reconcile', function () {
         $this->info("Reconciling {$transactions->count()} processing transactions...");
 
         foreach ($transactions as $trx) {
+            $fulfillment = app(\App\Services\FulfillmentService::class);
+
+            // Guard anti-retry tanpa batas: order yang sudah gagal final atau
+            // kehabisan percobaan ditahan untuk admin, bukan dihubungi supplier lagi.
+            if ($fulfillment->attemptsExhausted($trx)) {
+                $fulfillment->holdForManualReview($trx, sprintf(
+                    'Percobaan otomatis supplier habis (%d kali); perlu tindakan admin.',
+                    (int) $trx->supplier_attempts
+                ));
+                $this->warn("Invoice {$trx->invoice_id} ditahan untuk tindakan admin (batas percobaan).");
+
+                continue;
+            }
+
+            // Hormati jeda antar percobaan supaya supplier tidak dibanjiri request.
+            if (! $fulfillment->canAttemptNow($trx)) {
+                continue;
+            }
+
             try {
                 $type = strtolower((string) ($trx->productItem?->product?->supplier_type ?? ''));
                 $supplier = in_array($type, ['tokovoucher', 'apigames'], true)
                     ? app(\App\Services\Supplier\TokovoucherService::class)
                     : app(DigiflazzService::class);
+
+                $fulfillment->recordAttempt($trx, $supplier->supplierName());
 
                 $res = $supplier->topup($trx, $trx->customer_data ?? []);
 
@@ -66,9 +88,13 @@ Artisan::command('orders:reconcile', function () {
                         ])->save();
                         $shouldNotify = true;
                     } elseif ($res['status'] === 'failed') {
+                        // Supplier menyatakan gagal: final. Tandai butuh tindakan
+                        // admin supaya scheduler berhenti mengirim ulang.
                         $locked->forceFill([
                             'status' => 'failed',
                             'supplier_response' => json_encode($res['raw'] ?? $res),
+                            'needs_manual_review' => true,
+                            'manual_review_reason' => 'Supplier menyatakan transaksi gagal: '.trim((string) ($res['message'] ?? 'tanpa keterangan')),
                         ])->save();
                     } else {
                         $locked->forceFill([
@@ -81,7 +107,23 @@ Artisan::command('orders:reconcile', function () {
                     app(NotificationService::class)->orderCompleted($trx->fresh());
                     $this->info("Invoice {$trx->invoice_id} completed (SN: {$trx->supplier_sn})");
                 } elseif ($res['status'] === 'failed') {
-                    $this->warn("Invoice {$trx->invoice_id} failed");
+                    $this->warn("Invoice {$trx->invoice_id} failed — ditahan untuk tindakan admin");
+
+                    try {
+                        app(\App\Services\Notification\TelegramAlertService::class)->alertFulfillmentFailed(
+                            $trx->fresh(),
+                            (string) ($trx->fresh()->manual_review_reason ?? 'Supplier menyatakan transaksi gagal')
+                        );
+                    } catch (\Throwable) {}
+                }
+            } catch (\App\Services\Supplier\SupplierException $e) {
+                // Gagal final (mis. rc 02 "Transaksi Gagal") atau kuota percobaan
+                // habis → tahan order; selain itu biarkan di-retry dengan backoff.
+                if (! $e->isRetryable() || $fulfillment->attemptsExhausted($trx)) {
+                    $fulfillment->holdForManualReview($trx, $e->getMessage());
+                    $this->warn("Invoice {$trx->invoice_id} ditahan untuk tindakan admin: {$e->getMessage()}");
+                } else {
+                    $this->error("Supplier sementara gagal untuk {$trx->invoice_id}: {$e->getMessage()}");
                 }
             } catch (\Throwable $e) {
                 $this->error("Error reconciling {$trx->invoice_id}: {$e->getMessage()}");

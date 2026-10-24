@@ -14,6 +14,26 @@ return [
 
     'default' => env('SUPPLIER', 'digiflazz'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Batas percobaan otomatis
+    |--------------------------------------------------------------------------
+    |
+    | Fulfillment otomatis TIDAK boleh mengirim ulang transaksi tanpa batas.
+    | Setelah `max_attempts` percobaan (atau langsung saat supplier menyatakan
+    | gagal final), order ditahan untuk tindakan admin dan tidak di-retry lagi
+    | oleh scheduler.
+    |
+    */
+
+    'max_attempts' => (int) env('SUPPLIER_MAX_ATTEMPTS', 3),
+
+    // Jeda minimum (menit) sebelum percobaan otomatis berikutnya, per attempt.
+    'retry_backoff_minutes' => [5, 15, 60],
+
+    // Supplier yang boleh dipilih otomatis. Selain ini, order ditahan.
+    'allowed_types' => ['digiflazz', 'tokovoucher', 'apigames'],
+
     'digiflazz' => [
         'username' => env('DIGIFLAZZ_USERNAME'),
         'api_key' => env('DIGIFLAZZ_API_KEY'),

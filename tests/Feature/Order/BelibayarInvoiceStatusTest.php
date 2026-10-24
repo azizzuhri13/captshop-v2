@@ -42,6 +42,7 @@ class BelibayarInvoiceStatusTest extends TestCase
         ]);
         $this->app->instance(BelibayarClient::class, $client);
         $supplier = $this->mock(SupplierInterface::class);
+        $supplier->shouldReceive('supplierName')->andReturn('digiflazz');
         $supplier->shouldReceive('topup')->once()->andReturn(['supplier_ref' => 'DF-1', 'status' => 'completed', 'raw' => []]);
         $this->app->instance(SupplierInterface::class, $supplier);
 

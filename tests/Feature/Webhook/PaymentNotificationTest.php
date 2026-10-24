@@ -66,6 +66,7 @@ class PaymentNotificationTest extends TestCase
     protected function mockSupplierCompleted(): void
     {
         $supplier = $this->mock(SupplierInterface::class);
+        $supplier->shouldReceive('supplierName')->andReturn('digiflazz');
         $supplier->shouldReceive('topup')->once()->andReturn([
             'supplier_ref' => 'DF-REF-1',
             'supplier_sn' => 'SN-987654321',

@@ -60,6 +60,7 @@ class PaymentReconcileTest extends TestCase
     public function test_recovers_pending_transaction_that_provider_reports_paid(): void
     {
         $supplier = $this->mock(SupplierInterface::class);
+        $supplier->shouldReceive('supplierName')->andReturn('digiflazz');
         $supplier->shouldReceive('topup')->once()->andReturn([
             'supplier_ref' => 'DF-1', 'supplier_sn' => 'SN-1', 'status' => 'completed', 'raw' => [],
         ]);
@@ -109,6 +110,7 @@ class PaymentReconcileTest extends TestCase
     public function test_recovers_late_paid_transaction_that_was_already_expired_locally(): void
     {
         $supplier = $this->mock(SupplierInterface::class);
+        $supplier->shouldReceive('supplierName')->andReturn('digiflazz');
         $supplier->shouldReceive('topup')->once()->andReturn([
             'supplier_ref' => 'DF-2', 'supplier_sn' => 'SN-2', 'status' => 'completed', 'raw' => [],
         ]);

@@ -194,6 +194,7 @@ class AdminPanelTest extends TestCase
 
         // Mock supplier supaya retry tidak memanggil API eksternal.
         $supplier = $this->mock(SupplierInterface::class);
+        $supplier->shouldReceive('supplierName')->andReturn('digiflazz');
         $supplier->shouldReceive('topup')->once()->andReturn([
             'supplier_ref' => 'DF-1',
             'supplier_sn' => 'SN-1',
