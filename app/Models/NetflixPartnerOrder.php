@@ -96,7 +96,6 @@ class NetflixPartnerOrder extends Model
             'stock_id' => $this->netflix_account_id,
             'profile_id' => $this->netflix_account_id,
             'otp_token' => $this->otp_token,
-            'otp_url' => url('/api/internal/netflix/otp/'.$this->otp_token),
             'reserved_until' => $this->reserved_until?->setTimezone('Asia/Jakarta')->toIso8601String(),
             'claimed_at' => $this->claimed_at?->setTimezone('Asia/Jakarta')->toIso8601String(),
             'cancelled_at' => $this->cancelled_at?->setTimezone('Asia/Jakarta')->toIso8601String(),

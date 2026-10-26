@@ -212,7 +212,7 @@ class NetflixPartnerApiTest extends TestCase
         $this->assertNotNull($claim->json('data.start_date'));
         $this->assertNotNull($claim->json('data.end_date'));
         $this->assertNotNull($claim->json('data.warranty_until'));
-        $this->assertStringContainsString('/otp/', $claim->json('data.otp_url'));
+        $this->assertArrayNotHasKey('otp_url', $claim->json('data'));
     }
 
     public function test_claim_repeat_is_idempotent_and_does_not_shift_dates(): void
