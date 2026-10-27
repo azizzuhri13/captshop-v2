@@ -64,7 +64,32 @@ class ProductItem extends Model
 
     public function effectivePrice(): string
     {
+        // CapCut: harga mengikuti tier akun stok termurah yang tersedia
+        // (turun sesuai umur akun / sisa masa aktif).
+        if ($this->product?->slug === 'capcut') {
+            $tier = $this->capcutTier();
+
+            if ($tier !== null) {
+                return (string) $tier['price'];
+            }
+        }
+
         return $this->isFlashSaleActive() ? $this->flash_sale_price : $this->sell_price;
+    }
+
+    /**
+     * Info tier CapCut termurah yang masih tersedia, atau null bila bukan
+     * produk CapCut / stok sellable kosong.
+     *
+     * @return array{tier: string, tier_label: string, price: int, currency: string, age_days: int, remaining_days: int, valid_until: string, sellable: bool, expired: bool}|null
+     */
+    public function capcutTier(): ?array
+    {
+        if ($this->product?->slug !== 'capcut') {
+            return null;
+        }
+
+        return \App\Services\CapcutTierService::cheapestAvailable()?->tierInfo();
     }
 
     /**
@@ -103,7 +128,7 @@ class ProductItem extends Model
         }
 
         if ($slug === 'capcut') {
-            return \App\Models\CapcutAccount::where('status', 'ready')->count();
+            return \App\Models\CapcutAccount::query()->sellable()->count();
         }
 
         if ($this->stock !== null) {

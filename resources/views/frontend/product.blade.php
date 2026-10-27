@@ -109,6 +109,18 @@
         })"
          class="space-y-6 pb-28"
     >
+        {{-- CapCut: harga & masa aktif mengikuti sisa masa berlaku akun stok. --}}
+        @if ($product->slug === 'capcut')
+            @php $capcutTier = \App\Services\CapcutTierService::cheapestAvailable()?->tierInfo(); @endphp
+            <div class="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-200/90">
+                <strong class="font-bold text-amber-300">Akun CapCut dijual sesuai sisa masa aktif.</strong>
+                @if ($capcutTier)
+                    Harga mulai Rp {{ number_format($capcutTier['price'], 0, ',', '.') }} untuk akun dengan {{ strtolower($capcutTier['tier_label']) }}: aktif sampai {{ \Carbon\Carbon::parse($capcutTier['valid_until'])->format('d/m/Y') }} ({{ $capcutTier['remaining_days'] }} hari lagi). Masa aktif dihitung dari tanggal akun masuk stok, bukan 1 bulan penuh sejak pembelian.
+                @else
+                    Stok akun CapCut sedang kosong.
+                @endif
+            </div>
+        @endif
         {{-- HERO SECTION ALA GAMBAR 1 (Target Reference) --}}
         <div class="-mx-4 -mt-6 sm:mx-0 sm:mt-0 mb-5">
             @if ($product->bannerUrl())

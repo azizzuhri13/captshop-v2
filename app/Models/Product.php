@@ -112,7 +112,7 @@ class Product extends Model
         }
 
         if ($this->slug === 'capcut') {
-            return \App\Models\CapcutAccount::where('status', 'ready')->count();
+            return \App\Models\CapcutAccount::query()->sellable()->count();
         }
 
         if ($this->isPremiumAccount()) {

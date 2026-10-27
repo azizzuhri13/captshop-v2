@@ -455,9 +455,28 @@ class FulfillmentService
     protected function fulfillCapcutStock(Transaction $transaction): Transaction
     {
         return \Illuminate\Support\Facades\DB::transaction(function () use ($transaction) {
-            $account = \App\Models\CapcutAccount::where('status', 'ready')
+            // Gunakan akun yang sudah dikunci saat checkout (harga & alokasi
+            // persis seperti invoice). Fallback ke akun termurah yang masih
+            // berlaku untuk order lama yang dibuat sebelum dynamic tier.
+            $account = \App\Models\CapcutAccount::query()
+                ->where('transaction_id', $transaction->id)
+                ->where('status', 'reserved')
                 ->lockForUpdate()
                 ->first();
+
+            if (! $account) {
+                $account = \App\Models\CapcutAccount::query()
+                    ->sellable()
+                    ->orderBy('created_at')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->first();
+            }
+
+            if ($account && $account->isExpired()) {
+                $account->forceFill(['status' => 'expired', 'channel' => null, 'transaction_id' => null])->save();
+                $account = null;
+            }
 
             if (! $account) {
                 Log::warning('Stok akun CapCut habis untuk transaksi '.$transaction->invoice_id);

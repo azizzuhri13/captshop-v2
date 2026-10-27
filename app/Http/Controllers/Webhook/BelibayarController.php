@@ -66,6 +66,7 @@ class BelibayarController extends Controller
                 }
             } elseif ($transaction->status === 'pending') {
                 $transaction->forceFill(['status' => 'expired'])->save();
+                \App\Models\CapcutAccount::releaseForTransaction($transaction->id);
             }
             return null;
         });

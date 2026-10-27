@@ -31,6 +31,8 @@ class InvoiceController extends Controller
 
         if ($transaction->status === 'pending' && $transaction->expired_at && $transaction->expired_at->isPast()) {
             $transaction->forceFill(['status' => 'expired'])->save();
+            // Lepas reservasi akun CapCut yang terkunci untuk invoice kedaluwarsa.
+            \App\Models\CapcutAccount::releaseForTransaction($transaction->id);
         }
 
         $canViewCredentials = $request->hasValidSignature()
@@ -83,6 +85,7 @@ class InvoiceController extends Controller
                         $locked = Transaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
                         if ($locked->status === 'pending') {
                             $locked->forceFill(['status' => 'expired'])->save();
+                            \App\Models\CapcutAccount::releaseForTransaction($locked->id);
                         }
                     });
                 }

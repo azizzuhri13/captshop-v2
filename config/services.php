@@ -107,6 +107,17 @@ return [
         'currency' => 'IDR',
         'ttl' => ['min' => 5, 'max' => 30, 'default' => 15],
 
+        // Stok akun CapCut otomatis kedaluwarsa 30 hari setelah masuk stok
+        // (created_at immutable). Harga turun mengikuti umur akun; aturan
+        // sisa masa aktif <= 7 hari selalu menang (harga clearance).
+        'stock_validity_days' => 30,
+        'tiers' => [
+            'full' => ['price' => 25000, 'min_age_days' => 0],
+            'mid' => ['price' => 20000, 'min_age_days' => 9],
+            'low' => ['price' => 15000, 'min_age_days' => 16],
+            'clearance' => ['price' => 10000, 'min_age_days' => 23, 'max_remaining_days' => 7],
+        ],
+
         'packages' => [
             '1m' => [
                 'name' => 'CapCut Pro 1 Bulan',
@@ -114,7 +125,7 @@ return [
                 'warranty_days' => 30,
                 'price' => 25000,
                 'currency' => 'IDR',
-                'expiry_rules' => 'Berjalan sejak start_date (Asia/Jakarta), berakhir pada end_date; garansi 30 hari.',
+                'expiry_rules' => 'Masa aktif mengikuti sisa masa berlaku akun stok (berakhir maksimal 30 hari setelah akun masuk stok); garansi mengikuti sisa masa aktif tersebut.',
             ],
         ],
     ],

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CapcutAccount;
 use App\Models\Coupon;
 use App\Models\PaymentChannel;
 use App\Models\ProductItem;
@@ -67,19 +68,40 @@ class OrderService
             throw new \InvalidArgumentException('Channel pembayaran tidak tersedia.');
         }
 
-        $amount = (float) $item->effectivePrice();
+        return DB::transaction(function () use ($item, $channel, $data) {
+            // CapCut: kunci akun stok termurah (paling tua) pada saat checkout
+            // supaya harga & alokasi akun persis sama dengan yang dibayar.
+            $capcutAccount = null;
 
-        // Kupon divalidasi ulang di server (bukan sekadar percaya hasil
-        // /coupon/check) dengan basis harga item yang dipilih.
-        $coupon = $this->resolveCoupon((string) ($data['coupon_code'] ?? ''), $amount);
-        $discount = $coupon?->calculateDiscount($amount) ?? 0.0;
+            if ($item->product?->slug === 'capcut') {
+                CapcutAccount::expireStale();
 
-        // Belibayar menerima nominal IDR bulat; tampilkan dan tagih jumlah yang sama.
-        $fee = round($channel->calculateFee($amount - $discount));
-        $total = round($amount - $discount + $fee);
-        $profit = round($amount - $discount - (float) $item->buy_price, 2);
+                $capcutAccount = CapcutAccount::query()
+                    ->sellable()
+                    ->orderBy('created_at')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->first();
 
-        return DB::transaction(function () use ($item, $channel, $data, $amount, $coupon, $discount, $fee, $total, $profit) {
+                if ($capcutAccount === null) {
+                    throw new \InvalidArgumentException('Maaf, stok untuk paket '.$item->name.' sedang habis.');
+                }
+
+                $amount = (float) $capcutAccount->tierInfo()['price'];
+            } else {
+                $amount = (float) $item->effectivePrice();
+            }
+
+            // Kupon divalidasi ulang di server (bukan sekadar percaya hasil
+            // /coupon/check) dengan basis harga item yang dipilih.
+            $coupon = $this->resolveCoupon((string) ($data['coupon_code'] ?? ''), $amount);
+            $discount = $coupon?->calculateDiscount($amount) ?? 0.0;
+
+            // Belibayar menerima nominal IDR bulat; tampilkan dan tagih jumlah yang sama.
+            $fee = round($channel->calculateFee($amount - $discount));
+            $total = round($amount - $discount + $fee);
+            $profit = round($amount - $discount - (float) $item->buy_price, 2);
+
             $transaction = Transaction::create([
                 'invoice_id' => $this->generateInvoiceId(),
                 'product_item_id' => $item->id,
@@ -98,6 +120,16 @@ class OrderService
                 'status' => 'pending',
                 'expired_at' => now()->addHours(self::PAYMENT_EXPIRY_HOURS),
             ]);
+
+            if ($capcutAccount !== null) {
+                // Reservasi akun persis ini untuk invoice; dilepas lagi bila
+                // pembayaran kedaluwarsa/dibatalkan (lihat CapcutAccount::releaseForTransaction).
+                $capcutAccount->forceFill([
+                    'status' => 'reserved',
+                    'channel' => 'web',
+                    'transaction_id' => $transaction->id,
+                ])->save();
+            }
 
             if ($coupon !== null) {
                 // Increment atomik agar kuota tidak lolos pada order konkuren.

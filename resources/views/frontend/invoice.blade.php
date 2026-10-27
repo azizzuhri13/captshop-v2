@@ -32,6 +32,17 @@
             $isCanva = ($transaction->productItem?->product?->slug === 'canva-pro') || $transaction->canvaAccount !== null;
             $isCapcut = ($transaction->productItem?->product?->slug === 'capcut') || $transaction->capcutAccount !== null;
             $isStreaming = $isNetflix || $isDisney || $isCanva || $isCapcut;
+            // CapCut: tampilkan sisa masa aktif persis (akun diskon tidak
+            // mendapatkan 1 bulan penuh sejak pembelian).
+            $capcutTerm = null;
+            if ($isCapcut && ($capcutStock = $transaction->capcutAccount)) {
+                $capcutInfo = $capcutStock->tierInfo();
+                $capcutTerm = [
+                    'remaining_days' => $capcutInfo['remaining_days'],
+                    'valid_until' => $capcutInfo['valid_until'],
+                    'tier_label' => $capcutInfo['tier_label'],
+                ];
+            }
             $streamingData = null;
             if ($isStreaming && in_array($transaction->status, ['completed'])) {
                 $acc = $transaction->netflixAccount ?? $transaction->disneyAccount ?? $transaction->canvaAccount ?? $transaction->capcutAccount;
@@ -72,6 +83,13 @@
             }
         @endphp
 
+        @if ($isCapcut && $capcutTerm)
+            <section class="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 text-xs leading-relaxed text-amber-200/90">
+                <p class="font-bold text-amber-300">Masa aktif akun: sampai {{ \Carbon\Carbon::parse($capcutTerm['valid_until'])->format('d/m/Y') }} (sisa {{ $capcutTerm['remaining_days'] }} hari)</p>
+                <p class="mt-1 text-slate-300">Harga dibayar: Rp {{ number_format((float) $transaction->amount, 0, ',', '.') }} — akun dijual sesuai sisa masa aktif ({{ strtolower($capcutTerm['tier_label']) }}), bukan 1 bulan penuh sejak pembelian.</p>
+            </section>
+        @endif
+
         @if ($isStreaming && $streamingData && in_array($transaction->status, ['completed']))
             @if (! $canViewCredentials)
                 {{-- Kredensial akun tidak ditampilkan pada URL invoice publik (tebakan). --}}
@@ -103,11 +121,21 @@
                         </div>
                         <div>
                             <h2 class="font-heading text-base font-bold text-slate-100">{{ $transaction->productItem?->product?->name ?? 'Akun Premium' }}</h2>
-                            <p class="text-xs text-slate-400">{{ $transaction->productItem?->name ?? 'Paket 1 Bulan' }}</p>
+                            <p class="text-xs text-slate-400">
+                                @if ($isCapcut && $capcutTerm)
+                                    Aktif s.d. {{ \Carbon\Carbon::parse($capcutTerm['valid_until'])->format('d/m/Y') }} — sisa {{ $capcutTerm['remaining_days'] }} hari
+                                @else
+                                    {{ $transaction->productItem?->name ?? 'Paket 1 Bulan' }}
+                                @endif
+                            </p>
                         </div>
                     </div>
                     <span class="rounded-lg bg-emerald-500/15 border border-emerald-500/40 px-2.5 py-1 text-[11px] font-bold text-emerald-400">
-                        ✓ Garansi Aktif
+                        @if ($isCapcut && $capcutTerm)
+                            Aktif s.d. {{ \Carbon\Carbon::parse($capcutTerm['valid_until'])->format('d/m/Y') }}
+                        @else
+                            ✓ Garansi Aktif
+                        @endif
                     </span>
                 </div>
 

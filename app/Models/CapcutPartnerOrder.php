@@ -16,6 +16,8 @@ class CapcutPartnerOrder extends Model
         'reservation_id',
         'payload_hash',
         'package_id',
+        'tier',
+        'stock_expires_at',
         'buyer_reference',
         'buyer_username',
         'ttl_minutes',
@@ -49,6 +51,7 @@ class CapcutPartnerOrder extends Model
             'start_date' => 'date',
             'end_date' => 'date',
             'warranty_until' => 'date',
+            'stock_expires_at' => 'date',
         ];
     }
 
@@ -62,6 +65,21 @@ class CapcutPartnerOrder extends Model
         $package = $packageId ? config('services.capcut.packages.'.$packageId) : null;
 
         return $package ? array_merge(['id' => $packageId], $package) : null;
+    }
+
+    /**
+     * Sisa hari masa aktif akun stok yang direservasi (snapshot saat reservasi).
+     */
+    public function remainingDays(): ?int
+    {
+        if ($this->stock_expires_at === null) {
+            return null;
+        }
+
+        $endOfDay = $this->stock_expires_at->copy()->endOfDay();
+        $seconds = $endOfDay->getTimestamp() - now()->getTimestamp();
+
+        return $seconds <= 0 ? 0 : (int) ceil($seconds / 86400);
     }
 
     public function toApiPayload(bool $withCredentials = false): array
@@ -79,6 +97,8 @@ class CapcutPartnerOrder extends Model
                 'warranty_days' => $package['warranty_days'] ?? null,
                 'price' => (float) $this->price,
                 'currency' => $this->currency,
+                'tier' => $this->tier,
+                'remaining_days' => $this->remainingDays(),
                 'expiry_rules' => $package['expiry_rules'] ?? null,
             ],
             'buyer_reference' => $this->buyer_reference,
@@ -100,6 +120,7 @@ class CapcutPartnerOrder extends Model
             'start_date' => $this->start_date?->toDateString(),
             'end_date' => $this->end_date?->toDateString(),
             'warranty_until' => $this->warranty_until?->toDateString(),
+            'stock_expires_at' => $this->stock_expires_at?->toDateString(),
         ];
 
         if ($withCredentials) {

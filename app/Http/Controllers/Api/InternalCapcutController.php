@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\CapcutAccount;
 use App\Models\CapcutPartnerOrder;
+use App\Services\CapcutTierService;
 use App\Support\Credentials;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,10 +27,35 @@ class InternalCapcutController extends Controller
         $this->authorizeInternal($request);
 
         $this->releaseStaleReservations();
+        $this->expireUnsoldStock();
 
-        $ready = CapcutAccount::where('status', 'ready')->count();
+        $sellable = CapcutAccount::query()->sellable()->get(['id', 'created_at', 'status']);
+        $tiers = collect(CapcutTierService::catalog())
+            ->mapWithKeys(fn (array $row) => [$row['tier'] => $row + ['ready_stock' => 0]])
+            ->all();
+
+        foreach ($sellable as $account) {
+            $info = $account->tierInfo();
+            if (isset($tiers[$info['tier']])) {
+                $tiers[$info['tier']]['ready_stock']++;
+            }
+        }
+
+        $ready = $sellable->count();
+        $lowestPrice = $sellable->isEmpty()
+            ? null
+            : $sellable->map(fn (CapcutAccount $account) => $account->tierInfo()['price'])->min();
+
         $sold = CapcutAccount::where('status', 'sold')->count();
         $total = CapcutAccount::count();
+
+        $packagePayload = [
+            'package_id' => '1m',
+            'name' => 'CapCut Pro 1 Bulan',
+            'ready_stock' => $ready,
+            'lowest_price' => $lowestPrice,
+            'tiers' => array_values($tiers),
+        ];
 
         $requestedPackage = $request->query('package_id');
         if ($requestedPackage === '1m') {
@@ -37,18 +63,18 @@ class InternalCapcutController extends Controller
                 'status' => 'success',
                 'package_id' => '1m',
                 'ready_stock' => $ready,
+                'lowest_price' => $lowestPrice,
+                'tiers' => array_values($tiers),
             ]);
         }
 
         return response()->json([
             'status' => 'success',
             'ready_stock' => $ready,
+            'lowest_price' => $lowestPrice,
+            'tiers' => array_values($tiers),
             'packages' => [
-                '1m' => [
-                    'package_id' => '1m',
-                    'name' => 'CapCut Pro 1 Bulan',
-                    'ready_stock' => $ready,
-                ],
+                '1m' => $packagePayload,
             ],
             'total_sold' => $sold,
             'total_accounts' => $total,
@@ -63,14 +89,30 @@ class InternalCapcutController extends Controller
     {
         $this->authorizeInternal($request);
 
+        $this->expireUnsoldStock();
+
+        $sellable = CapcutAccount::query()->sellable()->get(['id', 'created_at', 'status']);
+        $tierCatalog = CapcutTierService::catalog();
+        $lowestPrice = $sellable->isEmpty()
+            ? null
+            : $sellable->map(fn (CapcutAccount $account) => $account->tierInfo()['price'])->min();
+
         $catalog = collect(config('services.capcut.packages', []))
-            ->map(fn (array $package, string $id) => array_merge(['id' => $id], $package))
+            ->map(function (array $package, string $id) use ($tierCatalog, $lowestPrice) {
+                return array_merge(['id' => $id], $package, [
+                    'tiers' => $tierCatalog,
+                    'lowest_price' => $lowestPrice,
+                ]);
+            })
             ->values();
 
         return response()->json([
             'status' => 'success',
             'currency' => config('services.capcut.currency', 'IDR'),
             'ttl_minutes' => config('services.capcut.ttl'),
+            'stock_validity_days' => CapcutTierService::validityDays(),
+            'tiers' => $tierCatalog,
+            'lowest_price' => $lowestPrice,
             'packages' => $catalog,
         ]);
     }
@@ -120,8 +162,13 @@ class InternalCapcutController extends Controller
             }
 
             $this->releaseStaleReservations();
+            $this->expireUnsoldStock();
 
-            $account = CapcutAccount::where('status', 'ready')
+            // Ambil akun termurah (paling tua) yang masih bisa dijual, lalu kunci
+            // harga & sisa masa aktifnya ke order (snapshot, bukan katalog global).
+            $account = CapcutAccount::query()
+                ->sellable()
+                ->orderBy('created_at')
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->first();
@@ -130,20 +177,22 @@ class InternalCapcutController extends Controller
                 return $this->error('OUT_OF_STOCK', 'Stok akun CapCut Pro sedang habis.', 409);
             }
 
-            $package = CapcutPartnerOrder::package($payload['package_id']);
+            $tier = $account->tierInfo();
 
             $order = CapcutPartnerOrder::create([
                 'order_id' => $payload['order_id'],
                 'reservation_id' => (string) Str::uuid(),
                 'payload_hash' => $hash,
                 'package_id' => $payload['package_id'],
+                'tier' => $tier['tier'],
+                'stock_expires_at' => $tier['valid_until'],
                 'buyer_reference' => $payload['buyer_reference'],
                 'buyer_username' => $payload['buyer_username'],
                 'ttl_minutes' => $ttl,
                 'status' => 'reserved',
                 'capcut_account_id' => $account->id,
-                'price' => $package['price'] ?? 0,
-                'currency' => $package['currency'] ?? 'IDR',
+                'price' => $tier['price'],
+                'currency' => $tier['currency'],
                 'reserved_until' => now()->addMinutes($ttl),
                 'otp_token' => Str::random(48),
             ]);
@@ -267,13 +316,24 @@ class InternalCapcutController extends Controller
                 }
             }
 
-            $package = CapcutPartnerOrder::package($order->package_id);
-            $durationDays = $package['duration_days'] ?? 30;
-            $warrantyDays = $package['warranty_days'] ?? 30;
+            // Masa aktif mengikuti sisa masa berlaku akun stok (created_at + 30 hari),
+            // bukan start_date + durasi katalog, karena akun diskon sudah berjalan
+            // sebagian sebelum dijual.
+            $stockExpiresAt = $order->stock_expires_at
+                ? $order->stock_expires_at->copy()
+                : $account->validUntil();
+
+            if ($stockExpiresAt->copy()->endOfDay()->isPast()) {
+                if ($account->status === 'reserved') {
+                    $account->forceFill(['status' => 'expired', 'channel' => null, 'transaction_id' => null])->save();
+                }
+
+                return $this->flagReviewRequired($order, $payment, 'Masa berlaku akun stok CapCut sudah habis sebelum pembayaran diverifikasi (perlu refund).');
+            }
 
             $startDate = $nowWib->copy()->startOfDay();
-            $endDate = $startDate->copy()->addDays($durationDays);
-            $warrantyUntil = $startDate->copy()->addDays($warrantyDays);
+            $endDate = $stockExpiresAt->copy()->startOfDay();
+            $warrantyUntil = $endDate->copy();
 
             $order->forceFill($payment + [
                 'status' => 'completed',
@@ -407,7 +467,10 @@ class InternalCapcutController extends Controller
                     ->first();
 
                 if ($account && $account->status === 'reserved') {
-                    $account->forceFill(['status' => 'ready', 'channel' => null])->save();
+                    $account->forceFill([
+                        'status' => $account->isExpired() ? 'expired' : 'ready',
+                        'channel' => null,
+                    ])->save();
                 }
 
                 $order->forceFill(['status' => 'expired'])->save();
@@ -415,6 +478,12 @@ class InternalCapcutController extends Controller
 
             return $stale->count();
         });
+    }
+
+    /** Tandai akun ready yang masa berlakunya sudah habis agar tidak bisa dijual. */
+    protected function expireUnsoldStock(): int
+    {
+        return CapcutAccount::expireStale();
     }
 
     protected function flagReviewRequired(CapcutPartnerOrder $order, array $payment, string $reason): JsonResponse
