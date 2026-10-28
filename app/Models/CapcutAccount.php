@@ -75,8 +75,31 @@ class CapcutAccount extends Model
     /** Kembalikan akun yang direservasi checkout web ke stok ready. */
     public static function releaseForTransaction(int $transactionId): void
     {
-        static::query()
-            ->where('transaction_id', $transactionId)
+        static::releaseForTransactions([$transactionId]);
+    }
+
+    /**
+     * Lepas reservasi untuk sekumpulan transaksi sekaligus (mis. expiry
+     * terjadwal / rekonsiliasi). Hanya akun milik transaksi tersebut yang
+     * masih berstatus `reserved` yang disentuh.
+     *
+     * @param  iterable<int|string>  $transactionIds
+     */
+    public static function releaseForTransactions(iterable $transactionIds): int
+    {
+        $ids = collect($transactionIds)
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return 0;
+        }
+
+        return static::query()
+            ->whereIn('transaction_id', $ids)
             ->where('status', 'reserved')
             ->update(['status' => 'ready', 'channel' => null, 'transaction_id' => null]);
     }

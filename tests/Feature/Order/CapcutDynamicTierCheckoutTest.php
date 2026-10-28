@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductItem;
 use App\Models\Transaction;
 use App\Services\CapcutTierService;
+use App\Services\FulfillmentService;
 use App\Services\OrderService;
 use App\Services\Payment\PaymentGatewayInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -240,5 +241,153 @@ class CapcutDynamicTierCheckoutTest extends TestCase
 
         $this->assertSame(9000, CapcutTierService::price('clearance'));
         $this->assertSame(9000, $this->account('cfg@capcut.com', 24)->tierInfo()['price']);
+    }
+
+    /** Transaksi CapCut siap dibayar tanpa lewat gateway (untuk skenario bayar telat). */
+    private function paidCapcutTransaction(ProductItem $item, string $invoice, int $amount): Transaction
+    {
+        return Transaction::create([
+            'invoice_id' => $invoice,
+            'product_item_id' => $item->id,
+            'customer_data' => ['email' => 'buyer@test.com'],
+            'customer_phone' => '081234567890',
+            'customer_email' => 'buyer@test.com',
+            'amount' => $amount,
+            'total' => $amount,
+            'payment_gateway' => 'belibayar',
+            'status' => 'paid',
+            'paid_at' => Carbon::now(),
+        ]);
+    }
+
+    public function test_scheduled_expiry_releases_only_accounts_of_the_expired_transactions(): void
+    {
+        [, $item] = $this->capcutFixture();
+        $expiredAccount = $this->account('leak@capcut.com', 10);
+        $paidAccount = $this->account('paid@capcut.com', 10);
+
+        $expiredTrx = app(OrderService::class)->place([
+            'product_item_id' => $item->id,
+            'payment_channel' => 'QRIS',
+            'customer_phone' => '081234567890',
+            'customer_data' => ['email' => 'late@test.com'],
+        ]);
+        $paidTrx = app(OrderService::class)->place([
+            'product_item_id' => $item->id,
+            'payment_channel' => 'QRIS',
+            'customer_phone' => '081234567891',
+            'customer_data' => ['email' => 'paid@test.com'],
+        ]);
+
+        $expiredTrx->forceFill(['expired_at' => Carbon::now()->subMinute()])->save();
+        $paidTrx->forceFill([
+            'status' => 'paid',
+            'paid_at' => Carbon::now(),
+            'expired_at' => Carbon::now()->subMinute(),
+        ])->save();
+
+        $this->artisan('orders:expire')->assertExitCode(0);
+
+        $this->assertSame('expired', $expiredTrx->fresh()->status);
+        $expiredAccount->refresh();
+        $this->assertSame('ready', $expiredAccount->status);
+        $this->assertNull($expiredAccount->transaction_id);
+        $this->assertNull($expiredAccount->channel);
+
+        // Transaksi yang sudah paid tidak boleh dilepas reservasinya.
+        $this->assertSame('paid', $paidTrx->fresh()->status);
+        $paidAccount->refresh();
+        $this->assertSame('reserved', $paidAccount->status);
+        $this->assertSame($paidTrx->id, $paidAccount->transaction_id);
+    }
+
+    public function test_payment_reconcile_expiry_releases_the_reserved_account(): void
+    {
+        [, $item] = $this->capcutFixture();
+        $account = $this->account('reconcile@capcut.com', 10);
+
+        $trx = app(OrderService::class)->place([
+            'product_item_id' => $item->id,
+            'payment_channel' => 'QRIS',
+            'customer_phone' => '081234567890',
+            'customer_data' => ['email' => 'reconcile@test.com'],
+        ]);
+
+        $trx->forceFill([
+            'payment_ref' => 'byrtrx_reconcile',
+            'created_at' => Carbon::now()->subMinutes(5),
+            'expired_at' => Carbon::now()->subMinute(),
+        ])->save();
+
+        $client = \Mockery::mock(\App\Services\Payment\BelibayarClient::class);
+        $client->shouldReceive('status')->once()->andReturn(['status' => 'expired']);
+        $this->app->instance(\App\Services\Payment\BelibayarClient::class, $client);
+
+        $this->artisan('payments:reconcile')->assertExitCode(0);
+
+        $this->assertSame('expired', $trx->fresh()->status);
+        $account->refresh();
+        $this->assertSame('ready', $account->status);
+        $this->assertNull($account->transaction_id);
+    }
+
+    public function test_late_payment_never_receives_account_below_the_paid_amount(): void
+    {
+        [, $item] = $this->capcutFixture();
+        $cheap = $this->account('clearance@capcut.com', 24); // Rp 10.000
+
+        $trx = $this->paidCapcutTransaction($item, 'INV-CAPCUT-LATE-1', 25000);
+
+        $fulfilled = app(FulfillmentService::class)->fulfill($trx);
+
+        $this->assertSame('processing', $fulfilled->status);
+        $this->assertStringContainsString('tidak tersedia', (string) $fulfilled->supplier_response);
+        $this->assertStringContainsString('25.000', (string) $fulfilled->supplier_response);
+        $this->assertNull($fulfilled->supplier_sn);
+
+        $cheap->refresh();
+        $this->assertSame('ready', $cheap->status);
+        $this->assertNull($cheap->transaction_id);
+    }
+
+    public function test_late_payment_fallback_uses_stock_that_matches_the_paid_tier(): void
+    {
+        [, $item] = $this->capcutFixture();
+        $cheap = $this->account('clearance@capcut.com', 24); // Rp 10.000
+        $eligible = $this->account('eligible@capcut.com', 10); // Rp 20.000
+
+        $trx = $this->paidCapcutTransaction($item, 'INV-CAPCUT-LATE-2', 20000);
+
+        $fulfilled = app(FulfillmentService::class)->fulfill($trx);
+
+        $this->assertSame('completed', $fulfilled->status);
+        $this->assertStringContainsString('eligible@capcut.com', (string) $fulfilled->supplier_sn);
+
+        $eligible->refresh();
+        $this->assertSame('sold', $eligible->status);
+        $this->assertSame($trx->id, $eligible->transaction_id);
+
+        $cheap->refresh();
+        $this->assertSame('ready', $cheap->status);
+    }
+
+    public function test_expired_reserved_account_retries_eligible_ready_stock_before_processing(): void
+    {
+        [, $item] = $this->capcutFixture();
+        $stale = $this->account('stale@capcut.com', 31, 'reserved');
+        $ready = $this->account('ready@capcut.com', 10); // Rp 20.000
+
+        $trx = $this->paidCapcutTransaction($item, 'INV-CAPCUT-STALE-1', 20000);
+        $stale->forceFill(['transaction_id' => $trx->id, 'channel' => 'web'])->save();
+
+        $fulfilled = app(FulfillmentService::class)->fulfill($trx);
+
+        $this->assertSame('completed', $fulfilled->status);
+        $this->assertStringContainsString('ready@capcut.com', (string) $fulfilled->supplier_sn);
+
+        $this->assertSame('expired', $stale->fresh()->status);
+        $ready->refresh();
+        $this->assertSame('sold', $ready->status);
+        $this->assertSame($trx->id, $ready->transaction_id);
     }
 }

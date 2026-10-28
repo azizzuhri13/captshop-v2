@@ -12,10 +12,28 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote')->hourly();
 
 Artisan::command('orders:expire', function () {
-    $count = Transaction::where('status', 'pending')
-        ->whereNotNull('expired_at')
-        ->where('expired_at', '<', now())
-        ->update(['status' => 'expired']);
+    // Expiry terjadwal wajib melepas reservasi akun CapCut untuk transaksi
+    // yang benar-benar di-expire, dalam satu transaksi DB. Tanpa ini akun
+    // berstatus `reserved` selamanya dan stok tidak pernah kembali.
+    $count = \Illuminate\Support\Facades\DB::transaction(function () {
+        $ids = Transaction::where('status', 'pending')
+            ->whereNotNull('expired_at')
+            ->where('expired_at', '<', now())
+            ->lockForUpdate()
+            ->pluck('id');
+
+        if ($ids->isEmpty()) {
+            return 0;
+        }
+
+        $updated = Transaction::whereIn('id', $ids)
+            ->where('status', 'pending')
+            ->update(['status' => 'expired']);
+
+        \App\Models\CapcutAccount::releaseForTransactions($ids);
+
+        return $updated;
+    });
     $this->info("Expired {$count} transactions.");
 })->purpose('Batalkan transaksi pending yang melewati batas expired_at');
 
@@ -239,8 +257,21 @@ Artisan::command('payments:reconcile', function () {
             }
 
             if (in_array($status, ['expired', 'cancelled'], true) && $trx->status === 'pending') {
-                $trx->forceFill(['status' => 'expired'])->save();
-                $this->line("{$trx->invoice_id}: ditandai expired sesuai provider.");
+                $expired = \Illuminate\Support\Facades\DB::transaction(function () use ($trx) {
+                    $updated = Transaction::whereKey($trx->id)
+                        ->where('status', 'pending')
+                        ->update(['status' => 'expired']);
+
+                    if ($updated === 1) {
+                        \App\Models\CapcutAccount::releaseForTransactions([$trx->id]);
+                    }
+
+                    return $updated === 1;
+                });
+
+                if ($expired) {
+                    $this->line("{$trx->invoice_id}: ditandai expired sesuai provider.");
+                }
             }
         }
 

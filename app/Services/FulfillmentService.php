@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CapcutAccount;
 use App\Models\Transaction;
 use App\Services\Notification\NotificationService;
 use App\Services\Notification\TelegramAlertService;
@@ -456,39 +457,22 @@ class FulfillmentService
     {
         return \Illuminate\Support\Facades\DB::transaction(function () use ($transaction) {
             // Gunakan akun yang sudah dikunci saat checkout (harga & alokasi
-            // persis seperti invoice). Fallback ke akun termurah yang masih
-            // berlaku untuk order lama yang dibuat sebelum dynamic tier.
-            $account = \App\Models\CapcutAccount::query()
-                ->where('transaction_id', $transaction->id)
-                ->where('status', 'reserved')
-                ->lockForUpdate()
-                ->first();
+            // persis seperti invoice). Bila akun itu kedaluwarsa atau tidak
+            // ada, cari ulang stok ready yang layak sebelum menyerah.
+            $account = $this->allocateCapcutAccount($transaction);
 
             if (! $account) {
-                $account = \App\Models\CapcutAccount::query()
-                    ->sellable()
-                    ->orderBy('created_at')
-                    ->orderBy('id')
-                    ->lockForUpdate()
-                    ->first();
-            }
-
-            if ($account && $account->isExpired()) {
-                $account->forceFill(['status' => 'expired', 'channel' => null, 'transaction_id' => null])->save();
-                $account = null;
-            }
-
-            if (! $account) {
-                Log::warning('Stok akun CapCut habis untuk transaksi '.$transaction->invoice_id);
+                $reason = $this->capcutUnavailableReason($transaction);
+                Log::warning('Stok akun CapCut tidak tersedia untuk transaksi '.$transaction->invoice_id.': '.$reason);
                 $transaction->forceFill([
                     'status' => 'processing',
-                    'supplier_response' => json_encode(['error' => 'Stok akun CapCut habis, menunggu restock']),
+                    'supplier_response' => json_encode(['error' => $reason]),
                 ])->save();
 
                 try {
                     app(\App\Services\Notification\TelegramAlertService::class)->alertFulfillmentFailed(
                         $transaction,
-                        'Stok akun CapCut habis di database! Harap segera restock.'
+                        $reason
                     );
                 } catch (\Throwable) {}
 
@@ -525,6 +509,78 @@ class FulfillmentService
 
             return $transaction;
         });
+    }
+
+    /**
+     * Pilih akun CapCut untuk transaksi yang sudah dibayar.
+     *
+     * Prioritas: akun yang sudah dikunci saat checkout. Bila akun itu
+     * kedaluwarsa (atau tidak ada), cari ulang stok ready dan hanya terima
+     * akun yang tier harganya TIDAK lebih murah dari nominal yang dibayar.
+     * Fallback termurah tanpa batas hanya untuk order lama yang nominalnya
+     * belum di-snapshot (amount 0/kosong).
+     */
+    protected function allocateCapcutAccount(Transaction $transaction): ?CapcutAccount
+    {
+        $account = CapcutAccount::query()
+            ->where('transaction_id', $transaction->id)
+            ->where('status', 'reserved')
+            ->lockForUpdate()
+            ->first();
+
+        if ($account && $account->isExpired()) {
+            $account->forceFill(['status' => 'expired', 'channel' => null, 'transaction_id' => null])->save();
+            $account = null;
+        }
+
+        if ($account) {
+            return $account;
+        }
+
+        $paidAmount = $this->capcutPaidAmount($transaction);
+
+        $candidates = CapcutAccount::query()
+            ->sellable()
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($candidates as $candidate) {
+            if ($candidate->isExpired()) {
+                continue;
+            }
+
+            if ($paidAmount > 0 && $candidate->tierInfo()['price'] < $paidAmount) {
+                continue;
+            }
+
+            return $candidate;
+        }
+
+        return null;
+    }
+
+    /** Nominal yang sudah dibayar/disepakati saat checkout (snapshot). */
+    protected function capcutPaidAmount(Transaction $transaction): int
+    {
+        return (int) round((float) $transaction->amount);
+    }
+
+    /** Alasan kegagalan yang jujur: bedakan stok kosong vs tier tidak layak. */
+    protected function capcutUnavailableReason(Transaction $transaction): string
+    {
+        $paidAmount = $this->capcutPaidAmount($transaction);
+
+        if ($paidAmount <= 0) {
+            return 'Stok akun CapCut habis, menunggu restock';
+        }
+
+        return sprintf(
+            'Stok akun CapCut dengan tier senilai Rp %s (nominal dibayar) tidak tersedia. '
+            .'Order ditahan untuk review/refund; akun tier lebih rendah tidak dikirim otomatis.',
+            number_format($paidAmount, 0, ',', '.')
+        );
     }
 
     /**
