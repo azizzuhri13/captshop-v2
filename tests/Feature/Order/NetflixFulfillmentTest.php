@@ -15,6 +15,14 @@ class NetflixFulfillmentTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Halaman invoice memakai @vite; aset build tidak ada di lingkungan
+        // test/CI sehingga GET invoice akan 500 tanpa ini.
+        $this->withoutVite();
+    }
+
     public function test_netflix_transaction_is_fulfilled_from_internal_stock(): void
     {
         $category = Category::firstOrCreate(['slug' => 'aplikasi'], ['name' => 'Aplikasi', 'is_active' => true]);

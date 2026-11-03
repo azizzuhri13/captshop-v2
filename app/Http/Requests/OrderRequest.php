@@ -39,7 +39,9 @@ class OrderRequest extends FormRequest
             'customer_data' => ['required', 'array', 'min:1'],
             'customer_data.*' => ['nullable', 'string', 'max:100'],
             'customer_phone' => ['required', 'string', 'regex:/^(\+?62|0)8[1-9][0-9]{6,10}$/'],
-            'customer_email' => [config('payment.default') === 'belibayar' ? 'required' : 'nullable', 'email'],
+            // Kedua gateway aktif saat ini (Belibayar & Tripay) menolak tagihan
+            // tanpa email pembeli; email tidak pernah dikarang di server.
+            'customer_email' => ['required', 'email'],
             'coupon_code' => ['nullable', 'string', 'max:50'],
         ];
     }

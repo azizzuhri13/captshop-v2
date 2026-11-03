@@ -330,7 +330,7 @@
         @endif
 
         {{-- Instruksi pembayaran --}}
-        @if ($transaction->status === 'pending' && $transaction->payment_gateway === 'belibayar')
+        @if ($transaction->status === 'pending' && in_array($transaction->payment_gateway, ['belibayar', 'tripay'], true))
             <section class="rounded-2xl border border-slate-800 bg-slate-800/40 p-4">
                 <h2 class="mb-3 font-heading text-sm font-bold text-slate-100">Instruksi Pembayaran</h2>
 
@@ -340,13 +340,21 @@
 
                 @php
                     $instructions = $transaction->payment_instructions ?? [];
+                    $payableAmount = (int) ($instructions['payable_amount'] ?? 0);
                 @endphp
-                @if ($transaction->payment_gateway === 'belibayar' && !empty($instructions['va_number']))
+                @if ($payableAmount > 0 && $payableAmount !== (int) round((float) $transaction->total))
+                    <p class="mt-2 text-sm text-slate-400">
+                        Total yang harus dibayar:
+                        <span class="font-semibold text-emerald-400">Rp {{ number_format($payableAmount, 0, ',', '.') }}</span>
+                        <span class="text-xs text-slate-500">(termasuk biaya channel)</span>
+                    </p>
+                @endif
+                @if (!empty($instructions['va_number']))
                     <div class="mt-3 rounded-lg border border-slate-700 bg-slate-900 p-4">
                         <p class="text-xs text-slate-400">{{ in_array($transaction->payment_channel, ['ALFAMART', 'INDOMARET']) ? 'Kode bayar di kasir' : 'Nomor Virtual Account' }}</p>
                         <p class="mt-1 break-all font-mono text-lg font-bold text-white">{{ $instructions['va_number'] }}</p>
                     </div>
-                @elseif ($transaction->payment_gateway === 'belibayar' && !empty($instructions['qr_url']))
+                @elseif (!empty($instructions['qr_url']))
                     @php
                         $qrSource = $instructions['qr_url'];
                         $isSandboxDummy = ($qrSource === 'data:image/svg+xml;base64,PHN2Zy8+');
@@ -365,9 +373,9 @@
                     </div>
                 @elseif ($transaction->payment_gateway === 'belibayar' && $transaction->payment_channel === 'OVO' && $transaction->payment_ref)
                     <p class="mt-3 rounded-lg border border-slate-700 p-3 text-sm text-slate-200">Cek notifikasi pembayaran di aplikasi OVO pada nomor yang Anda masukkan.</p>
-                @elseif ($transaction->payment_url)
+                @elseif (!empty($transaction->payment_url))
                     <a href="{{ $transaction->payment_url }}" target="_blank" rel="noopener" class="btn-primary mt-3 w-full">
-                        Bayar via {{ $transaction->payment_channel }} →
+                        {{ $transaction->payment_gateway === 'tripay' ? 'Lanjut ke halaman pembayaran Tripay' : 'Bayar via '.$transaction->payment_channel }} →
                     </a>
                 @else
                     <p class="mt-3 rounded-lg border border-dashed border-slate-700 p-3 text-xs text-slate-500">

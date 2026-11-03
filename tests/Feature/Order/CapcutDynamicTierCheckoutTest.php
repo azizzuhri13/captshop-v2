@@ -39,6 +39,23 @@ class CapcutDynamicTierCheckoutTest extends TestCase
                 'expired_at' => Carbon::now()->addHour()->timestamp,
             ];
         });
+        // OrderService sekarang membaca bentuk kanonik dari gateway (bukan field
+        // mentah Belibayar), jadi double ini harus meniru kontrak normalizeCharge.
+        $gateway->shouldReceive('normalizeCharge')->andReturnUsing(function (array $response, Transaction $transaction) {
+            return [
+                'merchant_ref' => $response['reference'] ?? null,
+                'provider_ref' => $response['transaction_id'] ?? null,
+                'merchant_amount' => $response['amount'] ?? null,
+                'payable_amount' => $response['amount'] ?? null,
+                'channel' => $response['payment_channel'] ?? null,
+                'status' => $response['status'] ?? null,
+                'expires_at' => $response['expired_at'] ?? null,
+                'payment_url' => $response['payment_url'] ?? null,
+                'va_number' => $response['va_number'] ?? null,
+                'qr_string' => $response['qr_content'] ?? null,
+                'qr_url' => $response['qr_url'] ?? null,
+            ];
+        });
         $this->app->instance(PaymentGatewayInterface::class, $gateway);
     }
 

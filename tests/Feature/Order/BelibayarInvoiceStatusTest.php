@@ -16,6 +16,14 @@ class BelibayarInvoiceStatusTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Halaman invoice memakai @vite, sedangkan aset build tidak tersedia
+        // di lingkungan test/CI. Tanpa ini setiap GET invoice gagal 500.
+        $this->withoutVite();
+    }
+
     private function pending(): Transaction
     {
         $category = Category::create(['name' => 'Games', 'slug' => 'games']);
@@ -39,6 +47,7 @@ class BelibayarInvoiceStatusTest extends TestCase
         $client->shouldReceive('status')->once()->with($transaction->invoice_id)->andReturn([
             'reference' => $transaction->invoice_id, 'transaction_id' => $transaction->payment_ref,
             'amount' => 15000, 'payment_channel' => 'QRIS', 'status' => 'paid',
+            'expired_at' => now()->addMinutes(30)->timestamp,
         ]);
         $this->app->instance(BelibayarClient::class, $client);
         $supplier = $this->mock(SupplierInterface::class);
@@ -58,6 +67,7 @@ class BelibayarInvoiceStatusTest extends TestCase
         $client->shouldReceive('status')->once()->andReturn([
             'reference' => $transaction->invoice_id, 'transaction_id' => 'byrtrx_other',
             'amount' => 15000, 'payment_channel' => 'QRIS', 'status' => 'paid',
+            'expired_at' => now()->addMinutes(30)->timestamp,
         ]);
         $this->app->instance(BelibayarClient::class, $client);
         $this->post(route('invoice.check-status', $transaction->invoice_id))->assertRedirect();

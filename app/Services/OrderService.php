@@ -10,6 +10,7 @@ use App\Models\Transaction;
 use App\Services\Payment\PaymentException;
 use App\Services\Payment\PaymentGatewayInterface;
 use App\Support\DigiflazzCatalog;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -66,6 +67,14 @@ class OrderService
 
         if ($channel === null) {
             throw new \InvalidArgumentException('Channel pembayaran tidak tersedia.');
+        }
+
+        // Tripay menolak transaksi tanpa email pembeli. Tolak lebih awal agar
+        // user melihat error validasi, bukan pesanan yang batal di tengah jalan
+        // (dan jangan pernah mengarang alamat email pengganti).
+        if ($this->gateway->gatewayName() === 'tripay'
+            && trim((string) ($data['customer_email'] ?? '')) === '') {
+            throw new \InvalidArgumentException('Email wajib diisi untuk metode pembayaran ini.');
         }
 
         return DB::transaction(function () use ($item, $channel, $data) {
@@ -146,7 +155,7 @@ class OrderService
             }
 
             try {
-                $payment = $this->gateway->createTransaction($transaction, [
+                $payment = $this->createPayment($transaction, [
                     'name' => $item->product?->name.' — '.$item->name,
                     'price' => (int) round($total),
                     'quantity' => 1,
@@ -159,37 +168,28 @@ class OrderService
                     'sku' => $item->supplier_item_code ?? $transaction->invoice_id,
                 ]);
 
-                if ($this->gateway->gatewayName() !== 'belibayar') {
-                    throw PaymentException::requestFailed('Gateway pembayaran tidak didukung.');
-                }
-                $needsCode = in_array($channel->group, ['Virtual Account', 'Retail'], true);
-                $needsRedirect = in_array($channel->code, ['DANA', 'SPAY', 'ASTRA', 'SC'], true);
-                if (($payment['reference'] ?? null) !== $transaction->invoice_id
-                        || ! is_string($payment['transaction_id'] ?? null)
-                        || ! is_int($payment['amount'] ?? null)
-                        || $payment['amount'] !== (int) $transaction->total
-                        || ($payment['payment_channel'] ?? null) !== $channel->code
-                        || ($payment['status'] ?? null) !== 'pending'
-                        || ! is_int($payment['expired_at'] ?? null)
-                        || $payment['expired_at'] <= now()->timestamp
-                        || ($needsCode && empty($payment['va_number']))
-                        || ($channel->code === 'QRIS' && empty($payment['qr_url']) && empty($payment['qr_code']))
-                        || ($needsRedirect && empty($payment['payment_url']))) {
-                    throw PaymentException::requestFailed('Respons pembayaran Belibayar tidak lengkap atau tidak cocok.');
-                }
+                // Bentuk kanonik per gateway: identitas merchant_ref/amount/channel,
+                // status pending, expiry masa depan, dan minimal satu instruksi bayar
+                // yang valid. Semua penyimpangan = pesanan dibatalkan (fail-closed).
+                $canonical = $this->authorizePayment($payment, $transaction, $channel);
+
                 $transaction->forceFill([
-                    'payment_ref' => $payment['transaction_id'],
-                    'payment_url' => $payment['payment_url'] ?? null,
+                    'payment_ref' => $canonical['provider_ref'],
+                    'payment_url' => $canonical['payment_url'],
                     'payment_instructions' => [
-                        'va_number' => $payment['va_number'] ?? null,
-                        'qr_content' => $payment['qr_content'] ?? null,
-                        'qr_url' => $payment['qr_url'] ?? $payment['qr_code'] ?? null,
+                        'merchant_ref' => $canonical['merchant_ref'],
+                        'channel' => $canonical['channel'],
+                        'va_number' => $canonical['va_number'],
+                        'qr_content' => $canonical['qr_string'],
+                        'qr_url' => $canonical['qr_url'],
+                        'payable_amount' => $canonical['payable_amount'],
                     ],
-                    'expired_at' => \Illuminate\Support\Carbon::createFromTimestamp($payment['expired_at']),
+                    'expired_at' => Carbon::createFromTimestamp($canonical['expires_at']),
                 ])->save();
             } catch (PaymentException $e) {
-                Log::warning('Gagal membuat transaksi Belibayar; pesanan dibatalkan.', [
+                Log::warning('Gagal membuat transaksi pembayaran; pesanan dibatalkan.', [
                     'invoice_id' => $transaction->invoice_id,
+                    'gateway' => $this->gateway->gatewayName(),
                     'error' => $e->getMessage(),
                 ]);
                 throw $e; // Rollback transaksi & penggunaan kupon; jangan buat invoice tanpa instruksi bayar.
@@ -197,6 +197,163 @@ class OrderService
 
             return $transaction;
         });
+    }
+
+    /**
+     * Panggil gateway untuk membuat tagihan, dengan pemulihan aman untuk
+     * kegagalan jaringan yang ambigu.
+     *
+     * Bila koneksi putus saat create, transaksi bisa saja SUDAH terbentuk di
+     * Tripay meski respons tidak pernah sampai. Karena itu:
+     *  - create tidak pernah diulang otomatis (risiko double charge);
+     *  - satu kali GET detail berdasarkan merchant_ref (invoice kita) dipakai
+     *    untuk memastikan apakah transaksi benar-benar ada;
+     *  - hanya transaksi pending yang identitasnya cocok yang dipakai ulang.
+     * Bila detail juga gagal/tidak cocok, error asli dilempar sehingga pesanan
+     * dibatalkan dan tidak pernah tampil dengan instruksi bayar palsu.
+     *
+     * @param  array<string, mixed>  $item
+     * @param  array<string, mixed>  $customer
+     * @param  array<string, mixed>  $params
+     * @return array<string, mixed>
+     *
+     * @throws PaymentException
+     */
+    protected function createPayment(Transaction $transaction, array $item, array $customer, array $params): array
+    {
+        try {
+            return $this->gateway->createTransaction($transaction, $item, $customer, $params);
+        } catch (PaymentException $e) {
+            if ($this->gateway->gatewayName() !== 'tripay') {
+                throw $e;
+            }
+
+            try {
+                $detail = $this->gateway->getTransactionDetail((string) $transaction->invoice_id);
+                $recovered = $this->gateway->normalizeDetail($detail, $transaction);
+            } catch (PaymentException) {
+                throw $e;
+            }
+
+            if (($recovered['status'] ?? null) !== 'pending') {
+                throw $e;
+            }
+
+            Log::warning('Create Tripay ambigu; transaksi pending dipulihkan lewat detail merchant_ref.', [
+                'invoice_id' => $transaction->invoice_id,
+                'provider_ref' => $recovered['provider_ref'],
+            ]);
+
+            return $detail;
+        }
+    }
+
+    /**
+     * Validasi kanonik sebelum instruksi bayar disimpan. Nilai yang dipakai
+     * untuk menagih pelanggan harus persis sama dengan pesanan kita.
+     *
+     * @param  array<string, mixed>  $response
+     * @return array<string, mixed>
+     *
+     * @throws PaymentException
+     */
+    protected function authorizePayment(array $response, Transaction $transaction, PaymentChannel $channel): array
+    {
+        $canonical = $this->gateway->normalizeCharge($response, $transaction, $channel);
+
+        $invoiceId = (string) $transaction->invoice_id;
+        $total = (int) round((float) $transaction->total);
+
+        if (($canonical['merchant_ref'] ?? null) !== $invoiceId
+            || ! is_string($canonical['provider_ref'] ?? null)
+            || $canonical['provider_ref'] === ''
+            || ! is_int($canonical['merchant_amount'] ?? null)
+            || $canonical['merchant_amount'] !== $total
+            || ($canonical['status'] ?? null) !== 'pending'
+            || ! is_int($canonical['expires_at'] ?? null)
+            || $canonical['expires_at'] <= now()->timestamp) {
+            throw PaymentException::requestFailed('Respons pembayaran tidak lengkap atau tidak cocok dengan pesanan.');
+        }
+
+        $this->assertChannelIdentity((string) $canonical['channel'], $channel);
+        $this->assertPayableInstructions($canonical);
+
+        return $canonical;
+    }
+
+    /**
+     * Channel yang ditagih harus channel yang dipilih pelanggan: kode internal
+     * untuk Belibayar, kode metode Tripay hasil pemetaan config untuk Tripay.
+     *
+     * @throws PaymentException
+     */
+    protected function assertChannelIdentity(string $gatewayChannel, PaymentChannel $channel): void
+    {
+        if ($this->gateway->gatewayName() === 'tripay') {
+            $map = config('payment.tripay.channels', []);
+            $expected = is_array($map) ? ($map[strtoupper(trim((string) $channel->code))] ?? null) : null;
+
+            if (! is_string($expected) || $expected === ''
+                || strtoupper(trim($gatewayChannel)) !== strtoupper($expected)) {
+                throw PaymentException::requestFailed('Channel pembayaran Tripay tidak sesuai permintaan.');
+            }
+
+            return;
+        }
+
+        if ($gatewayChannel !== (string) $channel->code) {
+            throw PaymentException::requestFailed('Channel pembayaran tidak sesuai permintaan.');
+        }
+    }
+
+    /**
+     * Minimal satu instruksi bayar harus bisa dipakai pelanggan, dan setiap
+     * instruksi yang ada harus berbentuk wajar. URL non-HTTPS ditolak supaya
+     * tautan bayar tidak bisa dibelokkan ke skema lain (javascript:, dll).
+     *
+     * @param  array<string, mixed>  $canonical
+     *
+     * @throws PaymentException
+     */
+    protected function assertPayableInstructions(array $canonical): void
+    {
+        $vaNumber = $canonical['va_number'] ?? null;
+        $qrString = $canonical['qr_string'] ?? null;
+        $qrUrl = $canonical['qr_url'] ?? null;
+        $paymentUrl = $canonical['payment_url'] ?? null;
+
+        if ($vaNumber === null && $qrString === null && $qrUrl === null && $paymentUrl === null) {
+            throw PaymentException::requestFailed('Gateway tidak mengembalikan instruksi pembayaran.');
+        }
+
+        if ($vaNumber !== null && preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{3,39}$/D', $vaNumber) !== 1) {
+            throw PaymentException::requestFailed('Kode pembayaran dari gateway tidak valid.');
+        }
+
+        foreach ([$paymentUrl, $qrUrl] as $url) {
+            if ($url !== null) {
+                $this->assertHttpsUrl($url);
+            }
+        }
+    }
+
+    /**
+     * @throws PaymentException
+     */
+    protected function assertHttpsUrl(string $url): void
+    {
+        // Belibayar sandbox memakai QR dummy inline; itu satu-satunya non-HTTPS
+        // yang boleh tampil, dan hanya sebagai gambar.
+        if (str_starts_with($url, 'data:image/')) {
+            return;
+        }
+
+        $parts = parse_url($url);
+
+        if (! is_array($parts) || ($parts['scheme'] ?? null) !== 'https' || empty($parts['host'])
+            || isset($parts['user']) || isset($parts['pass'])) {
+            throw PaymentException::requestFailed('Tautan pembayaran dari gateway tidak valid.');
+        }
     }
 
     /**
