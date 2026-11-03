@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\Admin;
 use App\Services\Payment\PaymentGatewayInterface;
 use App\Services\Payment\BelibayarService;
+use App\Services\Payment\TripayService;
 use App\Services\Supplier\DigiflazzService;
 use App\Services\Supplier\TokovoucherService;
 use App\Services\Supplier\SupplierInterface;
@@ -49,7 +50,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(PaymentGatewayInterface::class, BelibayarService::class);
+        $this->app->bind(PaymentGatewayInterface::class, function ($app) {
+            // Hanya config eksplisit yang boleh memilih gateway. Sengaja TIDAK
+            // membaca env('PAYMENT_GATEWAY'): host produksi masih menyimpan nilai
+            // lama dan order flow Tripay (webhook/reconcile) belum dirilis.
+            $default = strtolower(trim((string) config('payment.default', 'belibayar')));
+
+            if ($default === 'tripay' && config('payment.tripay.enabled') === true) {
+                return $app->make(TripayService::class);
+            }
+
+            return $app->make(BelibayarService::class);
+        });
         $this->app->bind(GameValidatorInterface::class, GameValidatorService::class);
 
         $this->app->bind(SupplierInterface::class, function ($app) {
