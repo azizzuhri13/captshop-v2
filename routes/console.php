@@ -387,17 +387,19 @@ Artisan::command('payments:reconcile-tripay', function () {
                 continue;
             }
 
-            // Kode channel, bukan nama tampilan: `payment_method` berisi teks
-            // seperti "BCA Virtual Account" sedangkan yang tersimpan adalah
-            // kode Tripay (BCAVA). Kode yang tidak ada = tidak cocok, sehingga
-            // detail tanpa payment_method_code tidak pernah dipercaya.
-            $methodCode = $detail['payment_method_code'] ?? null;
+            // Kode channel berasal dari `payment_method` pada respons detail.
+            // Di detail Tripay, `payment_method` berisi kode (mis. "BCAVA")
+            // dan `payment_name` berisi nama tampilan ("BCA Virtual Account");
+            // `payment_method_code` hanya ada di body callback, bukan detail.
+            // normalizeDetail() sudah menolak detail tanpa payment_method,
+            // jadi `channel` kanonik selalu berisi kode yang dikirim provider.
+            $methodCode = (string) $canonical['channel'];
 
             $reason = $state->mismatchReason(
                 $trx,
                 (string) $canonical['provider_ref'],
                 (int) $canonical['payable_amount'],
-                is_string($methodCode) ? $methodCode : '',
+                $methodCode,
             );
 
             if ($reason !== null) {

@@ -88,8 +88,11 @@ class TripayReconcileTest extends TestCase
         return array_merge([
             'reference' => 'T-PROVIDER-1',
             'merchant_ref' => 'INV-TRIPAY-RECON-1',
-            'payment_method' => 'BCA Virtual Account',
-            'payment_method_code' => 'BCAVA',
+            // Detail Tripay berisi kode channel di `payment_method` dan nama
+            // tampilan di `payment_name`; `payment_method_code` hanya ada di
+            // body callback, jadi fixture detail tidak boleh memakainya.
+            'payment_method' => 'BCAVA',
+            'payment_name' => 'BCA Virtual Account',
             'amount' => 15000,
             'fee_merchant' => 0,
             'fee_customer' => 700,
@@ -218,8 +221,8 @@ class TripayReconcileTest extends TestCase
         $this->mock(SupplierInterface::class)->shouldNotReceive('topup');
         $transaction = $this->transaction();
         $this->fakeDetail($this->detail([
-            'payment_method' => 'QRIS',
-            'payment_method_code' => 'QRIS',
+            'payment_method' => 'BNIVA',
+            'payment_name' => 'BNI Virtual Account',
         ]));
 
         $this->artisan('payments:reconcile-tripay')->assertExitCode(0);

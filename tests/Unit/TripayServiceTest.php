@@ -6,6 +6,7 @@ use App\Models\PaymentChannel;
 use App\Models\Transaction;
 use App\Services\Payment\PaymentException;
 use App\Services\Payment\TripayService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -14,6 +15,8 @@ class TripayServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Waktu dibekukan supaya perbandingan timestamp deterministik.
+        Carbon::setTestNow(Carbon::parse('2026-11-03 10:00:00', 'UTC'));
         config()->set('payment.tripay.mode', 'sandbox');
         config()->set('payment.tripay.api_key', 'dev-api-key');
         config()->set('payment.tripay.private_key', 'dev-private-key');
@@ -24,6 +27,14 @@ class TripayServiceTest extends TestCase
             'BCA' => 'BCAVA',
             'OVO' => 'OVO',
         ]);
+    }
+
+    protected function tearDown(): void
+    {
+        // Jangan biarkan waktu beku merembes ke test lain di proses yang sama.
+        Carbon::setTestNow();
+
+        parent::tearDown();
     }
 
     private function transaction(string $invoiceId = 'INV-1', int $total = 15000): Transaction
@@ -72,8 +83,11 @@ class TripayServiceTest extends TestCase
             // SKU dari params menang atas invoice id: Tripay butuh kode produk.
             $this->assertSame('ml-10', $body['order_items'][0]['sku']);
             $this->assertSame(15000, $body['order_items'][0]['price']);
-            $this->assertLessThanOrEqual(1440, $body['expired_time']);
-            $this->assertGreaterThan(0, $body['expired_time']);
+            // Dokumen Tripay: expired_time = unix timestamp batas bayar, bukan
+            // durasi menit. Nilai menit (mis. 1440) akan dibaca sebagai 1970.
+            $this->assertIsInt($body['expired_time']);
+            $this->assertGreaterThan(now()->timestamp, $body['expired_time']);
+            $this->assertSame(now()->addMinutes(30)->timestamp, $body['expired_time']);
             $this->assertSame(hash_hmac('sha256', 'T12345INV-115000', 'dev-private-key'), $body['signature']);
 
             return Http::response(['success' => true, 'data' => $this->chargeResponse(['payment_method' => 'BCAVA'])], 201);
@@ -97,6 +111,56 @@ class TripayServiceTest extends TestCase
         $this->assertSame('00020101021226', $normalized['qr_string']);
         $this->assertSame('https://tripay.co.id/qr/T1234567890.png', $normalized['qr_url']);
         $this->assertNull($normalized['va_number']);
+    }
+
+    public function test_qris_expiry_is_clamped_to_channel_sixty_minute_ceiling(): void
+    {
+        $transaction = $this->transaction();
+        // Pesanan masih berlaku 3 jam, tetapi QRIS hanya menerima 60 menit.
+        $transaction->expired_at = now()->addHours(3);
+
+        Http::fake(function ($request) {
+            $body = json_decode($request->body(), true);
+
+            $this->assertSame('QRIS', $body['method']);
+            $this->assertSame(now()->addHour()->timestamp, $body['expired_time']);
+
+            return Http::response(['success' => true, 'data' => $this->chargeResponse()], 201);
+        });
+
+        app(TripayService::class)->createTransaction(
+            $transaction,
+            ['name' => 'Voucher 10 Gems', 'price' => 15000, 'quantity' => 1],
+            ['name' => 'Budi', 'phone' => '081234567890', 'email' => 'budi@example.com'],
+            ['method' => 'QRIS', 'sku' => 'ml-10'],
+        );
+
+        // Body diverifikasi di dalam fake: 60 menit dari sekarang.
+    }
+
+    public function test_past_expiry_never_sends_a_timestamp_in_the_past(): void
+    {
+        Http::fake();
+
+        foreach ([now()->subMinute(), now()] as $expiredAt) {
+            $transaction = $this->transaction();
+            $transaction->expired_at = $expiredAt;
+
+            try {
+                app(TripayService::class)->createTransaction(
+                    $transaction,
+                    ['name' => 'Voucher 10 Gem', 'price' => 15000, 'quantity' => 1],
+                    ['name' => 'Budi', 'phone' => '0812', 'email' => 'budi@example.com'],
+                    ['method' => 'QRIS'],
+                );
+                $this->fail('Batas bayar yang sudah lewat tidak boleh menghasilkan instruksi bayar.');
+            } catch (PaymentException $e) {
+                $this->assertStringContainsString('sudah lewat', $e->getMessage());
+            }
+        }
+
+        // Tidak ada request ke Tripay: timestamp masa lalu tidak pernah dikirim.
+        Http::assertNothingSent();
     }
 
     public function test_create_requires_customer_email_before_calling_gateway(): void

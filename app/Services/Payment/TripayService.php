@@ -21,6 +21,38 @@ class TripayService implements PaymentGatewayInterface
 {
     private const GATEWAY = 'tripay';
 
+    /**
+     * Batas maksimum `expired_time` per channel menurut tabel channel Tripay
+     * (menit). Request di atas batas ini ditolak channel, jadi nilai selalu
+     * diklem. Channel yang tidak terdaftar memakai default konservatif 24 jam.
+     */
+    private const MAX_EXPIRY_MINUTES = [
+        'QRIS' => 60,
+        'QRISC' => 1440,
+        'QRIS2' => 1440,
+        'DANA' => 60,
+        'SHOPEEPAY' => 60,
+        'BNIVA' => 1440,
+        'OTHERBANKVA' => 1440,
+        'ALFAMART' => 1440,
+        'ALFAMIDI' => 1440,
+        'BSIVA' => 180,
+        'MUAMALATVA' => 180,
+        'BCAVA' => 4320,
+        'BRIVA' => 4320,
+        'MANDIRIVA' => 4320,
+        'PERMATAVA' => 4320,
+        'CIMBVA' => 4320,
+        'OCBCVA' => 4320,
+        'DANAMONVA' => 4320,
+        'BCASVA' => 4320,
+        'JATIMVA' => 4320,
+        'INDOMARET' => 4320,
+        'OVO' => 4320,
+    ];
+
+    private const DEFAULT_MAX_EXPIRY_MINUTES = 1440;
+
     public function __construct(private TripayClient $client) {}
 
     public function gatewayName(): string
@@ -58,13 +90,14 @@ class TripayService implements PaymentGatewayInterface
             ]],
         ];
 
-        // Tripay memakai menit kedaluwarsa (maks 24 jam), bukan timestamp.
-        if ($transaction->expired_at !== null) {
-            $minutes = (int) ceil(($transaction->expired_at->timestamp - now()->timestamp) / 60);
+        // `expired_time` Tripay adalah unix timestamp batas bayar (bukan
+        // durasi menit). Nilai yang sudah lewat ditolak sebagai request tidak
+        // sah, jadi timestamp masa lalu tidak pernah dikirim: pesanan yang
+        // batas bayarnya sudah lewat tidak boleh mendapat instruksi bayar baru.
+        $expiredTime = $this->expiredTime($transaction, $method);
 
-            if ($minutes > 0) {
-                $payload['expired_time'] = min($minutes, 24 * 60);
-            }
+        if ($expiredTime !== null) {
+            $payload['expired_time'] = $expiredTime;
         }
 
         if (isset($params['return_url']) && is_string($params['return_url']) && $params['return_url'] !== '') {
@@ -197,6 +230,34 @@ class TripayService implements PaymentGatewayInterface
             // memicu fulfillment, hanya menunggu callback/detail berikutnya.
             default => 'pending',
         };
+    }
+
+    /**
+     * Batas bayar dalam unix timestamp, diklem ke maksimum channel.
+     *
+     * `null` hanya bila pesanan memang tidak punya batas bayar; dalam hal itu
+     * Tripay memakai default 24 jam. Batas bayar yang sudah lewat tidak pernah
+     * dikirim sebagai timestamp masa lalu — request seperti itu tidak sah dan
+     * akan memberi instruksi bayar untuk pesanan yang reservasinya berakhir.
+     *
+     * @throws PaymentException
+     */
+    private function expiredTime(Transaction $transaction, string $method): ?int
+    {
+        if ($transaction->expired_at === null) {
+            return null;
+        }
+
+        $now = now()->timestamp;
+        $target = $transaction->expired_at->timestamp;
+
+        if ($target <= $now) {
+            throw PaymentException::requestFailed('Batas waktu pembayaran sudah lewat; instruksi bayar tidak dibuat.');
+        }
+
+        $ceilingMinutes = self::MAX_EXPIRY_MINUTES[strtoupper($method)] ?? self::DEFAULT_MAX_EXPIRY_MINUTES;
+
+        return min($target, $now + $ceilingMinutes * 60);
     }
 
     /**
