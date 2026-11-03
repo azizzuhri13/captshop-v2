@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\InternalNetflixController;
 use App\Http\Controllers\Webhook\BelibayarController;
 use App\Http\Controllers\Webhook\DigiflazzController;
 use App\Http\Controllers\Webhook\TokovoucherController;
+use App\Http\Controllers\Webhook\TripayController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('webhook')->group(function () {
     Route::post('/belibayar', [BelibayarController::class, 'handle'])->middleware('throttle:60,1');
+    Route::post('/tripay', [TripayController::class, 'handle'])->middleware('throttle:60,1');
     Route::post('/tokovoucher', [TokovoucherController::class, 'handle'])->middleware('throttle:60,1');
     Route::post('/digiflazz', [DigiflazzController::class, 'handle'])->middleware('throttle:60,1');
 });
