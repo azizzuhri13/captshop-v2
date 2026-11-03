@@ -82,25 +82,75 @@ class TripayClientTest extends TestCase
         }
     }
 
-    public function test_unknown_mode_or_foreign_base_url_is_refused_before_network(): void
+    /**
+     * Mode menentukan origin; base URL TIDAK dibaca dari config/env.
+     *
+     * Host produksi lama masih menyimpan TRIPAY_BASE_URL berisi origin live.
+     * Bila nilai itu dibaca, mode sandbox menjadi mustahil dan header
+     * Authorization bisa terkirim ke host lain. Jadi kontraknya bukan lagi
+     * "tolak base URL asing", melainkan "abaikan sepenuhnya": request wajib
+     * tetap menuju origin resmi sesuai mode.
+     */
+    public function test_sandbox_mode_ignores_legacy_live_base_url_instead_of_using_it(): void
+    {
+        config()->set('payment.tripay.base_url', 'https://api.tripay.co.id');
+        config()->set('payment.tripay.mode', 'sandbox');
+
+        $requested = [];
+
+        Http::fake(function ($request) use (&$requested) {
+            $requested[] = $request->url();
+
+            return Http::response(['success' => true, 'data' => ['reference' => 'T99', 'merchant_ref' => 'INV-1', 'status' => 'UNPAID']], 201);
+        });
+
+        app(TripayClient::class)->createTransaction([
+            'method' => 'QRIS',
+            'merchant_ref' => 'INV-1',
+            'amount' => 15000,
+        ]);
+
+        $this->assertSame(['https://tripay.co.id/api-sandbox/transaction/create'], $requested);
+
+        foreach ($requested as $url) {
+            $this->assertStringStartsWith('https://tripay.co.id/api-sandbox/', $url);
+            // Origin live tidak boleh tersentuh saat mode sandbox.
+            $this->assertStringNotContainsString('https://tripay.co.id/api/transaction', $url);
+        }
+    }
+
+    public function test_foreign_base_url_never_receives_credentials(): void
     {
         config()->set('payment.tripay.base_url', 'https://attacker.example/api');
+        config()->set('payment.tripay.mode', 'sandbox');
+
+        Http::fake(fn () => Http::response(['success' => true, 'data' => ['reference' => 'T99']], 201));
+
+        app(TripayClient::class)->createTransaction([
+            'method' => 'QRIS',
+            'merchant_ref' => 'INV-1',
+            'amount' => 15000,
+        ]);
+
+        Http::assertSent(function ($request) {
+            return str_starts_with($request->url(), 'https://tripay.co.id/api-sandbox/')
+                && ! str_contains($request->url(), 'attacker.example');
+        });
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'attacker.example'));
+    }
+
+    public function test_unknown_mode_is_refused_before_any_request(): void
+    {
+        config()->set('payment.tripay.mode', 'staging');
         Http::fake();
 
+        $this->expectException(PaymentException::class);
         try {
             app(TripayClient::class)->createTransaction(['method' => 'QRIS', 'merchant_ref' => 'INV-1', 'amount' => 15000]);
-            $this->fail('Base URL asing harus ditolak.');
-        } catch (PaymentException $e) {
-            $this->assertStringNotContainsString('dev-api-key', $e->getMessage());
         } finally {
             Http::assertNothingSent();
         }
-
-        config()->set('payment.tripay.base_url', null);
-        config()->set('payment.tripay.mode', 'staging');
-
-        $this->expectException(PaymentException::class);
-        app(TripayClient::class)->createTransaction(['method' => 'QRIS', 'merchant_ref' => 'INV-1', 'amount' => 15000]);
     }
 
     public function test_rejected_response_surfaces_provider_message_without_leaking_key(): void

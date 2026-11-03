@@ -11,9 +11,10 @@ use Illuminate\Support\Facades\Http;
  *
  * Keamanan yang dijaga di sini:
  *  - kredensial tidak pernah ditulis ke log/pesan exception;
- *  - base URL dibatasi allowlist sandbox/live resmi, sehingga konfigurasi
- *    yang salah tidak bisa mengarahkan request (beserta Authorization
- *    header) ke host lain;
+ *  - base URL DITURUNKAN dari mode (sandbox/live), tidak pernah dibaca dari
+ *    config/env. Env TRIPAY_BASE_URL lama di host produksi berisi URL live,
+ *    sehingga membacanya akan membuat mode sandbox mustahil dan bisa
+ *    mengarahkan request (beserta Authorization header) ke host lain;
  *  - signature request = HMAC SHA256(merchant_code . merchant_ref . amount)
  *    dengan private key, sesuai kontrak Closed Payment Tripay.
  */
@@ -41,21 +42,33 @@ class TripayClient
             throw PaymentException::notConfigured();
         }
 
-        $base = rtrim((string) (config('payment.tripay.base_url') ?: self::BASE_URLS[$mode]), '/');
+        // Base URL hanya berasal dari mode; tidak ada override config yang
+        // bisa membelokkan request. Nilai kredensial juga divalidasi bentuknya
+        // agar nilai rusak (spasi/newline/URL) gagal sebelum ada request.
+        $base = self::BASE_URLS[$mode];
 
-        // Override hanya boleh menunjuk origin resmi yang sama dengan mode.
-        // Ini mencegah SSRF/kebocoran Bearer token bila ENV salah isi.
-        if ($base !== self::BASE_URLS[$mode]) {
-            throw PaymentException::notConfigured();
-        }
-
-        if (! is_string($apiKey) || $apiKey === ''
-            || ! is_string($privateKey) || $privateKey === ''
-            || ! is_string($merchantCode) || $merchantCode === '') {
+        if (! is_string($apiKey) || preg_match('/^[^\s]{8,512}\z/', $apiKey) !== 1
+            || ! is_string($privateKey) || preg_match('/^[^\s]{8,512}\z/', $privateKey) !== 1
+            || ! is_string($merchantCode) || preg_match('/^[A-Za-z0-9]{3,32}\z/', $merchantCode) !== 1) {
             throw PaymentException::notConfigured();
         }
 
         return [$apiKey, $privateKey, $merchantCode, $base, $mode];
+    }
+
+    /**
+     * Apakah kredensial + mode valid tanpa melakukan request jaringan.
+     * Dipakai panel admin sebagai syarat mengaktifkan Tripay.
+     */
+    public function isConfigured(): bool
+    {
+        try {
+            $this->settings();
+
+            return true;
+        } catch (PaymentException) {
+            return false;
+        }
     }
 
     /**

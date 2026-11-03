@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\SiteSetting;
+use App\Support\Credentials;
+use App\Support\PaymentGateway;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -37,6 +39,12 @@ class SettingController extends Controller
         'belibayar_webhook_secret' => 'Belibayar Webhook Secret',
         'belibayar_merchant_id' => 'Belibayar Merchant ID',
 
+        // Integrasi — Tripay (secret tersimpan terpisah dari tampilan)
+        'tripay_mode' => 'Tripay Mode (sandbox / live)',
+        'tripay_merchant_code' => 'Tripay Merchant Code (mis. T0001)',
+        'tripay_api_key' => 'Tripay API Key',
+        'tripay_private_key' => 'Tripay Private Key',
+
         // Integrasi — Supplier (DigiFlazz)
         'supplier_default' => 'Supplier Default (digiflazz / tokovoucher)',
         'digiflazz_username' => 'DigiFlazz Username',
@@ -63,6 +71,8 @@ class SettingController extends Controller
         'belibayar_api_key',
         'belibayar_secret_key',
         'belibayar_webhook_secret',
+        'tripay_api_key',
+        'tripay_private_key',
         'digiflazz_api_key',
         'tokovoucher_secret_key',
         'tokovoucher_signature',
@@ -95,6 +105,11 @@ class SettingController extends Controller
             'schema' => self::SETTINGS,
             'secretKeys' => self::SECRET_KEYS,
             'fileKeys' => self::FILE_KEYS,
+            'paymentGateway' => PaymentGateway::effective(),
+            'paymentGatewayStored' => PaymentGateway::storedChoice(),
+            'tripayReadiness' => PaymentGateway::tripayReadiness(),
+            'tripayCallbackUrl' => (string) config('payment.tripay.callback_url'),
+            'tripayMode' => strtolower(trim((string) Credentials::get('tripay_mode', config('payment.tripay.mode', 'sandbox')))),
         ]);
     }
 
@@ -123,6 +138,64 @@ class SettingController extends Controller
                     }
                 },
             ],
+            // Mode Tripay hanya dua nilai resmi. Nilai lain akan membuat
+            // client menolak semua request, jadi tolak lebih awal di form.
+            'settings.tripay_mode' => ['nullable', 'string', 'in:sandbox,live'],
+            // Merchant code Tripay berformat alfanumerik tanpa spasi
+            // (mis. T0001). Validasi hanya untuk nilai baru agar nilai lama
+            // yang salah ketik tidak memblokir penyimpanan setting lain.
+            'settings.tripay_merchant_code' => [
+                'nullable', 'string', 'max:64',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $value = trim((string) $value);
+
+                    if ($value === '' || $value === SiteSetting::get('tripay_merchant_code')) {
+                        return;
+                    }
+
+                    if (preg_match('/^[A-Za-z0-9]{3,32}\z/', $value) !== 1) {
+                        $fail('Tripay Merchant Code harus 3-32 karakter alfanumerik tanpa spasi, misalnya T0001.');
+                    }
+                },
+            ],
+            // Secret Tripay: tolak spasi/newline/karakter kontrol dan nilai
+            // terlalu pendek/panjang. Masker bullet (••••) tetap lolos dan
+            // diabaikan oleh loop penyimpanan, sama seperti secret lain.
+            'settings.tripay_api_key' => [
+                'nullable', 'string', 'max:512',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $value = (string) $value;
+
+                    if ($value === '') {
+                        return;
+                    }
+
+                    if (preg_match('/^[^\s]{8,512}\z/u', $value) !== 1) {
+                        $fail('Tripay API Key tidak valid: 8-512 karakter tanpa spasi/baris baru.');
+                    }
+                },
+            ],
+            'settings.tripay_private_key' => [
+                'nullable', 'string', 'max:512',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    $value = (string) $value;
+
+                    if ($value === '') {
+                        return;
+                    }
+
+                    if (preg_match('/^[^\s]{8,512}\z/u', $value) !== 1) {
+                        $fail('Tripay Private Key tidak valid: 8-512 karakter tanpa spasi/baris baru.');
+                    }
+                },
+            ],
+            // Saklar gateway punya aksi sendiri (updateGateway) yang memeriksa
+            // readiness dan menulis audit log. Menolak key ini di form umum
+            // menutup jalur tulis kedua: halaman lama yang masih memuat input
+            // duplikat `settings[payment_gateway]` tidak bisa memindahkan
+            // gateway tanpa guard, dan satu-satunya sumber kebenaran tetap
+            // route admin.settings.payment-gateway.
+            'settings.payment_gateway' => ['prohibited'],
             // Rule `image` Laravel tidak mengenali .ico, jadi validasi mime
             // dilakukan eksplisit agar favicon .ico tetap diterima. SVG dilarang untuk mencegah Stored XSS.
             'site_logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg,gif,webp,ico', 'max:2048'],
@@ -197,5 +270,63 @@ class SettingController extends Controller
         AuditLog::record(auth('admin')->user(), 'update', 'SiteSetting', null, null, $changes);
 
         return back()->with('success', 'Pengaturan berhasil disimpan.');
+    }
+
+    /**
+     * Saklar gateway eksplisit (belibayar ↔ tripay).
+     *
+     * Tripay hanya boleh diaktifkan bila kredensial, channel aktif, dan
+     * callback URL sudah siap. Mengisi kredensial saja tidak pernah
+     * memindahkan gateway. Kembali ke Belibayar selalu diizinkan sebagai
+     * jalur rollback.
+     */
+    public function updateGateway(Request $request): RedirectResponse
+    {
+        // Normalisasi sebelum validasi: spasi/huruf besar dari form tidak boleh
+        // lolos menjadi gateway "baru" yang tidak dikenal. Nilai selain dua
+        // gateway resmi tetap ditolak (fail-closed), bukan dipetakan diam-diam.
+        $request->merge([
+            'gateway' => strtolower(trim((string) $request->input('gateway'))),
+        ]);
+
+        $validated = $request->validate([
+            'gateway' => ['required', 'string', 'in:'.PaymentGateway::BELIBAYAR.','.PaymentGateway::TRIPAY],
+        ]);
+
+        $target = strtolower(trim($validated['gateway']));
+        $current = PaymentGateway::storedChoice() ?? PaymentGateway::effective();
+
+        if ($target === PaymentGateway::TRIPAY) {
+            $readiness = PaymentGateway::tripayReadiness();
+
+            if (! $readiness['ready']) {
+                return back()->withErrors([
+                    'gateway' => 'Tripay belum bisa diaktifkan: '.implode(' ', $readiness['missing']),
+                ]);
+            }
+        }
+
+        // Hanya dua nilai resmi yang bisa tersimpan; apa pun selain Tripay
+        // berarti Belibayar, sehingga saklar tidak pernah menyimpan nilai yang
+        // membuat effective() menebak-nebak.
+        $target = $target === PaymentGateway::TRIPAY ? PaymentGateway::TRIPAY : PaymentGateway::BELIBAYAR;
+
+        SiteSetting::updateOrCreate(
+            ['key' => PaymentGateway::SETTING_KEY],
+            ['value' => $target]
+        );
+
+        AuditLog::record(
+            auth('admin')->user(),
+            'update',
+            'SiteSetting',
+            null,
+            ['payment_gateway' => $current],
+            ['payment_gateway' => $target]
+        );
+
+        return back()->with('success', $target === PaymentGateway::TRIPAY
+            ? 'Gateway aktif: Tripay. Pesanan baru akan memakai Tripay.'
+            : 'Gateway aktif: Belibayar.');
     }
 }

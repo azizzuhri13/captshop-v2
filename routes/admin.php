@@ -89,6 +89,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Pengaturan berisi kredensial gateway: hanya super_admin (default-deny).
         Route::get('settings', [SettingController::class, 'edit'])->middleware('admin.can:admin.settings')->name('settings.edit');
         Route::put('settings', [SettingController::class, 'update'])->middleware('admin.can:admin.settings')->name('settings.update');
+        // Saklar gateway pembayaran: aksi terpisah & teraudit, hanya untuk
+        // super_admin, dengan guard readiness di controller.
+        Route::post('settings/payment-gateway', [SettingController::class, 'updateGateway'])
+            ->middleware('admin.can:admin.settings')
+            ->name('settings.payment-gateway');
 
         // Manajemen akun admin: hanya super_admin (ability admin.accounts
         // tidak diberikan ke role lain di matriks Gate).

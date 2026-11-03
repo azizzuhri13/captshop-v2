@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\PaymentChannel;
 use App\Models\Product;
+use App\Support\PaymentGateway;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -55,7 +56,7 @@ class ProductController extends Controller
 
         $paymentChannels = PaymentChannel::query()
             ->where('is_active', true)
-            ->where('gateway', config('payment.default'))
+            ->where('gateway', PaymentGateway::effective())
             ->orderBy('sort_order')
             ->get()
             ->groupBy('group');
@@ -80,7 +81,7 @@ class ProductController extends Controller
 
         $paymentChannels = PaymentChannel::query()
             ->where('is_active', true)
-            ->where('gateway', config('payment.default'))
+            ->where('gateway', PaymentGateway::effective())
             ->orderBy('sort_order')
             ->get()
             ->groupBy('group');

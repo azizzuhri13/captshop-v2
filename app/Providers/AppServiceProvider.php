@@ -12,6 +12,7 @@ use App\Services\Supplier\SupplierInterface;
 use App\Services\GameValidator\GameValidatorInterface;
 use App\Services\GameValidator\GameValidatorService;
 use App\Support\Credentials;
+use App\Support\PaymentGateway;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -51,12 +52,11 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(PaymentGatewayInterface::class, function ($app) {
-            // Hanya config eksplisit yang boleh memilih gateway. Sengaja TIDAK
-            // membaca env('PAYMENT_GATEWAY'): host produksi masih menyimpan nilai
-            // lama dan order flow Tripay (webhook/reconcile) belum dirilis.
-            $default = strtolower(trim((string) config('payment.default', 'belibayar')));
-
-            if ($default === 'tripay' && config('payment.tripay.enabled') === true) {
+            // Keputusan gateway tunggal ada di App\Support\PaymentGateway agar
+            // binding dan katalog channel publik tidak pernah berbeda. Sengaja
+            // TIDAK membaca env('PAYMENT_GATEWAY'): host produksi masih
+            // menyimpan nilai lama dan Tripay butuh 'default' eksplisit.
+            if (PaymentGateway::isTripay()) {
                 return $app->make(TripayService::class);
             }
 
