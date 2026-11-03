@@ -168,6 +168,7 @@ Artisan::command('supplier:sync-prices', function () {
 Schedule::command('orders:expire')->everyMinute();
 Schedule::command('orders:reconcile')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('payments:reconcile')->everyFiveMinutes()->withoutOverlapping();
+Schedule::command('payments:reconcile-tripay')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('supplier:sync-digiflazz')->everyTwoHours()->withoutOverlapping();
 
 Artisan::command('payments:reconcile', function () {
@@ -280,6 +281,172 @@ Artisan::command('payments:reconcile', function () {
         $lock->release();
     }
 })->purpose('Rekonsiliasi status pembayaran Belibayar langsung ke gateway (jaring pengaman webhook)');
+
+Artisan::command('payments:reconcile-tripay', function () {
+    // Jaring pengaman Tripay: callback bisa hilang atau terlambat. Status
+    // provider adalah sumber kebenaran, tetapi hanya dipakai bila detailnya
+    // cocok persis dengan data tersimpan (merchant_ref, reference, nominal
+    // yang harus dibayar, kode channel). Data mentah provider tidak pernah
+    // langsung menulis status pesanan.
+    $lock = \Illuminate\Support\Facades\Cache::lock('command:payments:reconcile-tripay', 300);
+    if (! $lock->get()) {
+        $this->warn('Rekonsiliasi pembayaran Tripay sedang berjalan di proses lain.');
+
+        return;
+    }
+
+    try {
+        $gateway = app(\App\Services\Payment\TripayService::class);
+        $state = app(\App\Services\Payment\TripayTransactionState::class);
+        $fulfillment = app(\App\Services\FulfillmentService::class);
+
+        $transactions = Transaction::where('payment_gateway', 'tripay')
+            ->whereIn('status', ['pending', 'expired'])
+            ->whereNotNull('payment_ref')
+            ->where('created_at', '<=', now()->subMinutes(2))
+            // Konfirmasi terlambat masih diterima hingga 7 hari setelah kedaluwarsa.
+            ->where(function ($q) {
+                $q->whereNull('expired_at')->orWhere('expired_at', '>=', now()->subDays(7));
+            })
+            ->orderBy('id')
+            ->limit(50)
+            ->get();
+
+        $this->info("Memeriksa {$transactions->count()} transaksi Tripay yang belum final...");
+        $recovered = 0;
+
+        /*
+        | Penolakan dicatat tanpa signature/data pribadi. Alert hanya dikirim
+        | sekali per invoice per 6 jam supaya jadwal 5 menit tidak membanjiri
+        | admin, dan hanya bila status provider menunjukkan uang sudah masuk.
+        */
+        $reject = function (Transaction $trx, string $reason, array $detail): void {
+            $rawStatus = strtoupper(trim((string) ($detail['status'] ?? '')));
+
+            \Illuminate\Support\Facades\Log::warning('Rekonsiliasi Tripay: detail provider tidak dipakai; status pesanan tidak diubah.', [
+                'invoice_id' => $trx->invoice_id,
+                'reason' => $reason,
+                'provider_status' => $rawStatus !== '' ? $rawStatus : null,
+                'provider_reference' => $detail['reference'] ?? null,
+                'provider_amount' => $detail['amount'] ?? null,
+                'provider_fee_customer' => $detail['fee_customer'] ?? null,
+                'provider_method' => $detail['payment_method'] ?? null,
+            ]);
+
+            $this->warn("{$trx->invoice_id}: detail provider tidak cocok ({$reason}); dilewati.");
+
+            if ($rawStatus !== 'PAID') {
+                return;
+            }
+
+            $alertKey = 'tripay:reconcile:alert:'.$trx->id;
+
+            if (! \Illuminate\Support\Facades\Cache::add($alertKey, 1, now()->addHours(6))) {
+                return;
+            }
+
+            try {
+                app(\App\Services\Notification\TelegramAlertService::class)->send(
+                    "⚠️ <b>[REKONSILIASI TRIPAY]</b>\n"
+                    .'Alasan: <code>'.e($reason)."</code>\n"
+                    .'Invoice: <code>'.e((string) $trx->invoice_id)."</code>\n"
+                    .'Status lokal: <code>'.e((string) $trx->status)."</code>\n"
+                    .'Provider menyatakan PAID tetapi detail tidak cocok dengan pesanan tersimpan. Periksa manual sebelum memproses.'
+                );
+            } catch (\Throwable) {
+                // Alert best-effort; kegagalan notifikasi tidak boleh
+                // menghentikan putaran rekonsiliasi berikutnya.
+            }
+        };
+
+        foreach ($transactions as $trx) {
+            try {
+                $detail = $gateway->getTransactionDetail((string) $trx->payment_ref);
+            } catch (\Throwable $e) {
+                $this->error("Detail {$trx->invoice_id} gagal: {$e->getMessage()}");
+
+                continue;
+            }
+
+            // Closed payment Tripay wajib menandai transaksi sebagai closed.
+            // Field yang ada tetapi bukan 1 berarti detail tidak bisa dipercaya.
+            if (array_key_exists('is_closed_payment', $detail)
+                && ! in_array($detail['is_closed_payment'], [1, '1', true], true)) {
+                $reject($trx, 'not_closed_payment', $detail);
+
+                continue;
+            }
+
+            try {
+                // normalizeDetail (fail-closed) sudah memastikan merchant_ref
+                // sama dengan invoice dan amount sama dengan total pesanan.
+                $canonical = $gateway->normalizeDetail($detail, $trx);
+            } catch (\App\Services\Payment\PaymentException $e) {
+                $reject($trx, 'detail_invalid', $detail);
+
+                continue;
+            }
+
+            // Kode channel, bukan nama tampilan: `payment_method` berisi teks
+            // seperti "BCA Virtual Account" sedangkan yang tersimpan adalah
+            // kode Tripay (BCAVA). Kode yang tidak ada = tidak cocok, sehingga
+            // detail tanpa payment_method_code tidak pernah dipercaya.
+            $methodCode = $detail['payment_method_code'] ?? null;
+
+            $reason = $state->mismatchReason(
+                $trx,
+                (string) $canonical['provider_ref'],
+                (int) $canonical['payable_amount'],
+                is_string($methodCode) ? $methodCode : '',
+            );
+
+            if ($reason !== null) {
+                $reject($trx, $reason, $detail);
+
+                continue;
+            }
+
+            if ($canonical['status'] === 'paid') {
+                // Klaim di dalam row lock; fulfillment di luar lock dan hanya
+                // untuk pemenang klaim sehingga callback/rekonsiliasi ganda
+                // tidak pernah memanggil supplier dua kali.
+                $claimed = \Illuminate\Support\Facades\DB::transaction(function () use ($trx, $state) {
+                    $locked = Transaction::whereKey($trx->id)->lockForUpdate()->first();
+
+                    return $locked ? $state->claimPaid($locked) : null;
+                });
+
+                if ($claimed !== null) {
+                    $fulfillment->fulfill(Transaction::findOrFail($claimed));
+                    $recovered++;
+                    $this->info("{$trx->invoice_id}: dibayar — dipulihkan lewat rekonsiliasi Tripay.");
+                }
+
+                continue;
+            }
+
+            // Status failed/refund pada pesanan yang belum dibayar tidak
+            // menurunkan apa pun; biarkan orders:expire yang menutup reservasi,
+            // dan transaksi tetap terjangkau rekonsiliasi bila pembayaran
+            // ternyata masuk terlambat.
+            if ($canonical['status'] === 'expired') {
+                $expired = \Illuminate\Support\Facades\DB::transaction(function () use ($trx, $state) {
+                    $locked = Transaction::whereKey($trx->id)->lockForUpdate()->first();
+
+                    return $locked ? $state->closeUnpaid($locked, 'expired') : null;
+                });
+
+                if ($expired === null && $trx->fresh()?->status === 'expired') {
+                    $this->line("{$trx->invoice_id}: sudah expired.");
+                }
+            }
+        }
+
+        $this->info("Selesai. Transaksi Tripay dipulihkan: {$recovered}.");
+    } finally {
+        $lock->release();
+    }
+})->purpose('Rekonsiliasi status pembayaran Tripay langsung ke gateway (jaring pengaman webhook)');
 
 Artisan::command('supplier:check-balance', function () {
     try {

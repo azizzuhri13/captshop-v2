@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Webhook;
 
 use App\Http\Controllers\Controller;
-use App\Models\CapcutAccount;
 use App\Models\Transaction;
 use App\Services\FulfillmentService;
 use App\Services\Notification\TelegramAlertService;
 use App\Services\Payment\TripayService;
+use App\Services\Payment\TripayTransactionState;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,7 +36,11 @@ class TripayController extends Controller
     /** Status callback resmi Tripay untuk closed payment. */
     private const KNOWN_STATUSES = ['PAID', 'FAILED', 'EXPIRED', 'REFUND'];
 
-    public function __construct(private TripayService $gateway, private FulfillmentService $fulfillment) {}
+    public function __construct(
+        private TripayService $gateway,
+        private FulfillmentService $fulfillment,
+        private TripayTransactionState $state,
+    ) {}
 
     public function handle(Request $request): JsonResponse
     {
@@ -99,7 +103,7 @@ class TripayController extends Controller
                 return 'missing';
             }
 
-            $mismatch = $this->transactionMismatchReason(
+            $mismatch = $this->state->mismatchReason(
                 $transaction,
                 $reference,
                 (int) $totalAmount,
@@ -111,10 +115,10 @@ class TripayController extends Controller
             }
 
             return match ($status) {
-                'PAID' => $this->claimPaid($transaction),
-                'EXPIRED' => $this->closeUnpaid($transaction, 'expired'),
-                'FAILED' => $this->closeUnpaid($transaction, 'failed'),
-                'REFUND' => $this->recordRefund($transaction),
+                'PAID' => $this->state->claimPaid($transaction),
+                'EXPIRED' => $this->state->closeUnpaid($transaction, 'expired'),
+                'FAILED' => $this->state->closeUnpaid($transaction, 'failed'),
+                'REFUND' => $this->state->recordRefund($transaction),
                 default => null,
             };
         });
@@ -176,139 +180,6 @@ class TripayController extends Controller
         }
 
         return null;
-    }
-
-    /**
-     * Cocokkan payload dengan transaksi tersimpan. Nama field yang tidak cocok
-     * dikembalikan agar penolakan bisa didiagnosa tanpa menebak.
-     */
-    protected function transactionMismatchReason(
-        Transaction $transaction,
-        string $reference,
-        int $totalAmount,
-        string $methodCode,
-    ): ?string {
-        if ($transaction->payment_gateway !== 'tripay') {
-            return 'gateway';
-        }
-
-        if ((string) $transaction->payment_ref === '' || ! hash_equals((string) $transaction->payment_ref, $reference)) {
-            return 'reference';
-        }
-
-        $expectedChannel = $this->expectedChannel($transaction);
-
-        if ($expectedChannel === '' || strtoupper(trim($methodCode)) !== $expectedChannel) {
-            return 'payment_method_code';
-        }
-
-        $payable = $this->payableAmount($transaction);
-
-        if ($payable === null || $totalAmount !== $payable) {
-            return 'total_amount';
-        }
-
-        return null;
-    }
-
-    /**
-     * Klaim status paid secara idempoten. Hanya transaksi yang belum pernah
-     * dibayar (pending/expired, atau failed tanpa paid_at) yang boleh diklaim,
-     * sehingga callback duplikat tidak pernah memicu fulfillment kedua.
-     */
-    protected function claimPaid(Transaction $transaction): ?int
-    {
-        $claimable = in_array($transaction->status, ['pending', 'expired'], true)
-            || ($transaction->status === 'failed' && $transaction->paid_at === null);
-
-        if (! $claimable) {
-            return null;
-        }
-
-        $transaction->forceFill(['status' => 'paid', 'paid_at' => now()])->save();
-
-        return (int) $transaction->id;
-    }
-
-    /**
-     * Tutup transaksi yang belum dibayar. Tidak pernah menurunkan status yang
-     * sudah paid/processing/completed.
-     */
-    protected function closeUnpaid(Transaction $transaction, string $status): ?int
-    {
-        if ($transaction->status !== 'pending' || $transaction->paid_at !== null) {
-            return null;
-        }
-
-        $transaction->forceFill(['status' => $status])->save();
-        CapcutAccount::releaseForTransaction((int) $transaction->id);
-
-        return null;
-    }
-
-    /**
-     * REFUND hanya dicatat dan dieskalasi ke admin. Uang pelanggan sudah
-     * diterima dan order mungkin sudah dipenuhi; membalik status di sini akan
-     * menyembunyikan pekerjaan supplier yang sudah terjadi.
-     */
-    protected function recordRefund(Transaction $transaction): ?int
-    {
-        if ($transaction->paid_at === null && ! in_array($transaction->status, ['paid', 'processing', 'completed', 'failed'], true)) {
-            // Refund untuk transaksi yang belum pernah dibayar tidak mengubah apa pun.
-            return null;
-        }
-
-        Log::warning('Webhook Tripay REFUND diterima; status pesanan tidak dibalik.', [
-            'invoice_id' => $transaction->invoice_id,
-            'status' => $transaction->status,
-            'paid_at' => $transaction->paid_at?->toIso8601String(),
-        ]);
-
-        try {
-            app(TelegramAlertService::class)->send(
-                "⚠️ <b>[REFUND TRIPAY]</b>\n"
-                .'Invoice: <code>'.e((string) $transaction->invoice_id)."</code>\n"
-                .'Status pesanan: <code>'.e((string) $transaction->status)."</code>\n"
-                .'Status tidak dibalik otomatis. Periksa mutasi dan tindak lanjuti manual.'
-            );
-        } catch (\Throwable) {
-            // Alert adalah upaya terbaik; kegagalannya tidak boleh membuat
-            // Tripay mengulang callback refund tanpa akhir.
-        }
-
-        return null;
-    }
-
-    /** Kode channel Tripay yang tersimpan saat checkout (fallback: mapping config). */
-    protected function expectedChannel(Transaction $transaction): string
-    {
-        $stored = $transaction->payment_instructions['channel'] ?? null;
-
-        if (is_string($stored) && trim($stored) !== '') {
-            return strtoupper(trim($stored));
-        }
-
-        $map = config('payment.tripay.channels', []);
-        $internal = strtoupper(trim((string) $transaction->payment_channel));
-
-        return is_array($map) && isset($map[$internal]) && is_string($map[$internal])
-            ? strtoupper(trim($map[$internal]))
-            : '';
-    }
-
-    /** Nominal yang harus dibayar pelanggan: total pesanan + fee pelanggan. */
-    protected function payableAmount(Transaction $transaction): ?int
-    {
-        $stored = $transaction->payment_instructions['payable_amount'] ?? null;
-        $payable = $this->toInt($stored);
-
-        if ($payable !== null && $payable > 0) {
-            return $payable;
-        }
-
-        $total = $this->toInt($transaction->total);
-
-        return $total !== null && $total > 0 ? $total : null;
     }
 
     private function toInt(mixed $value): ?int
