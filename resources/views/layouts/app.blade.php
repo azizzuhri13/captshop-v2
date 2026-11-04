@@ -256,6 +256,11 @@
         <p class="font-heading text-base font-semibold text-slate-200">{{ $siteName }}</p>
         <p class="mt-1">Top-up game, voucher digital &amp; PPOB — instan, aman, 24/7.</p>
 
+        {{-- Kontak CS: tampil di seluruh halaman, termasuk mobile --}}
+        <div class="mt-5 text-left sm:text-center">
+            @include('partials.support-contacts')
+        </div>
+
         <div class="mt-4 flex flex-wrap items-center justify-center gap-x-3 sm:gap-x-5 gap-y-1.5 text-[11px] sm:text-xs font-medium text-slate-400">
             <a href="{{ route('pages.terms') }}" class="transition hover:text-white">Syarat &amp; Ketentuan</a>
             <span class="text-slate-700">•</span>
@@ -263,9 +268,13 @@
             <span class="text-slate-700">•</span>
             <a href="{{ route('pages.about') }}" class="transition hover:text-white">Tentang Kami</a>
             <span class="text-slate-700">•</span>
-            <a href="{{ route('articles.index') }}" class="transition hover:text-white">Artikel &amp; Berita</a>
-            <span class="text-slate-700">•</span>
             <a href="{{ route('pages.faq') }}" class="transition hover:text-white">FAQ</a>
+            @if (Route::has('pages.contact'))
+                <span class="text-slate-700">•</span>
+                <a href="{{ route('pages.contact') }}" class="transition hover:text-white">Kontak CS</a>
+            @endif
+            <span class="text-slate-700">•</span>
+            <a href="{{ route('articles.index') }}" class="transition hover:text-white">Artikel &amp; Berita</a>
         </div>
 
         <p class="mt-4 text-xs text-slate-500">

@@ -55,6 +55,8 @@ Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->
 Route::post('/logout', [GoogleAuthController::class, 'logout'])->name('logout');
 
 Route::view('/tentang-kami', 'frontend.pages.about')->name('pages.about');
+Route::view('/kontak-cs', 'frontend.pages.contact')->name('pages.contact');
+Route::redirect('/kontak', '/kontak-cs', 301);
 Route::view('/faq', 'frontend.pages.faq')->name('pages.faq');
 Route::view('/syarat-ketentuan', 'frontend.pages.terms')->name('pages.terms');
 Route::view('/kebijakan-privasi', 'frontend.pages.privacy')->name('pages.privacy');
