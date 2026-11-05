@@ -146,6 +146,21 @@ class FrontendRenderTest extends TestCase
             'amount' => (int) $transaction->total, 'status' => 'pending',
             'qr_url' => 'https://link.belibayar.id/test.png', 'expired_at' => now()->addHour()->timestamp,
         ]; });
+        // OrderService memakai bentuk kanonik dari gateway, jadi double ini
+        // harus meniru kontrak normalizeCharge (bukan field mentah saja).
+        $gateway->shouldReceive('normalizeCharge')->andReturnUsing(fn (array $response) => [
+            'merchant_ref' => $response['reference'] ?? null,
+            'provider_ref' => $response['transaction_id'] ?? null,
+            'merchant_amount' => $response['amount'] ?? null,
+            'payable_amount' => $response['amount'] ?? null,
+            'channel' => $response['payment_channel'] ?? null,
+            'status' => $response['status'] ?? null,
+            'expires_at' => $response['expired_at'] ?? null,
+            'payment_url' => $response['payment_url'] ?? null,
+            'va_number' => $response['va_number'] ?? null,
+            'qr_string' => $response['qr_content'] ?? null,
+            'qr_url' => $response['qr_url'] ?? null,
+        ]);
         $this->app->instance(PaymentGatewayInterface::class, $gateway);
 
         $response = $this->post('/order', [

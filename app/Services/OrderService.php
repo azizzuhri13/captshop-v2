@@ -180,6 +180,7 @@ class OrderService
                         'merchant_ref' => $canonical['merchant_ref'],
                         'channel' => $canonical['channel'],
                         'va_number' => $canonical['va_number'],
+                        ...(isset($canonical['va_number_raw']) ? ['va_number_raw' => $canonical['va_number_raw']] : []),
                         'qr_content' => $canonical['qr_string'],
                         'qr_url' => $canonical['qr_url'],
                         'payable_amount' => $canonical['payable_amount'],
@@ -315,9 +316,21 @@ class OrderService
      *
      * @throws PaymentException
      */
-    protected function assertPayableInstructions(array $canonical): void
+    protected function assertPayableInstructions(array &$canonical): void
     {
         $vaNumber = $canonical['va_number'] ?? null;
+
+        // Belibayar may format VA numbers with ASCII spaces (including a
+        // leading pad). Keep the provider value for audit, but only expose the
+        // validated, copyable number to the customer.
+        if ($this->gateway->gatewayName() === 'belibayar' && is_string($vaNumber) && str_contains($vaNumber, ' ')) {
+            if (preg_match('/^[A-Za-z0-9._ -]+$/D', $vaNumber) !== 1) {
+                throw PaymentException::requestFailed('Kode pembayaran dari gateway tidak valid.');
+            }
+
+            $canonical['va_number_raw'] = $vaNumber;
+            $canonical['va_number'] = $vaNumber = str_replace(' ', '', $vaNumber);
+        }
         $qrString = $canonical['qr_string'] ?? null;
         $qrUrl = $canonical['qr_url'] ?? null;
         $paymentUrl = $canonical['payment_url'] ?? null;

@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\PaymentChannel;
 use App\Models\Product;
 use App\Models\ProductItem;
+use App\Models\Transaction;
 use App\Services\OrderService;
 use App\Services\Payment\BelibayarClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -57,6 +58,84 @@ class BelibayarOrderTest extends TestCase
         } finally {
             $this->assertSame(0, \App\Models\Transaction::count());
         }
+    }
+
+    /** @dataProvider formattedVaProvider */
+    public function test_formatted_va_is_stored_as_copyable_number(string $channel, string $provided, string $expected): void
+    {
+        config()->set('payment.default', 'belibayar');
+        PaymentChannel::create(['gateway'=>'belibayar','code'=>$channel,'name'=>$channel,'group'=>'Virtual Account','flat_fee'=>'0','percent_fee'=>'0','is_active'=>true]);
+        $category = Category::create(['name'=>'Games','slug'=>'games']);
+        $product = Product::create(['category_id'=>$category->id,'name'=>'Voucher','slug'=>'voucher']);
+        $item = ProductItem::create(['product_id'=>$product->id,'name'=>'Voucher','buy_price'=>'10000','sell_price'=>'15000','is_active'=>true]);
+        $client = Mockery::mock(BelibayarClient::class);
+        $client->shouldReceive('charge')->once()->andReturnUsing(fn ($body) => [
+            'reference'=>$body['reference'],'transaction_id'=>'byrtrx_formatted','payment_channel'=>$channel,
+            'amount'=>$body['amount'],'status'=>'pending','expired_at'=>now()->addHour()->timestamp,
+            'va_number'=>$provided,
+        ]);
+        $this->app->instance(BelibayarClient::class, $client);
+
+        $transaction = app(OrderService::class)->place([
+            'product_item_id'=>$item->id,'payment_channel'=>$channel,'customer_data'=>['user_id'=>'123'],
+            'customer_phone'=>'081234567890','customer_email'=>'buyer@example.com',
+        ]);
+
+        $this->assertSame('pending', $transaction->fresh()->status);
+        $this->assertSame($expected, $transaction->fresh()->payment_instructions['va_number']);
+        $this->assertSame($provided, $transaction->fresh()->payment_instructions['va_number_raw']);
+        $this->assertSame(1, Transaction::count());
+    }
+
+    public static function formattedVaProvider(): array
+    {
+        return [
+            'BRI leading spaces' => ['BRI', '  57889300033021963', '57889300033021963'],
+            'BCA leading spaces' => ['BCA', '   70070331792504532493', '70070331792504532493'],
+            'BRI grouped spaces' => ['BRI', ' 5788 9300 0330 21963 ', '57889300033021963'],
+        ];
+    }
+
+    /** @dataProvider invalidVaProvider */
+    public function test_invalid_formatted_va_rolls_back_order(string $provided): void
+    {
+        config()->set('payment.default', 'belibayar');
+        PaymentChannel::create(['gateway'=>'belibayar','code'=>'BRI','name'=>'BRI','group'=>'Virtual Account','flat_fee'=>'0','percent_fee'=>'0','is_active'=>true]);
+        $category = Category::create(['name'=>'Games','slug'=>'games']);
+        $product = Product::create(['category_id'=>$category->id,'name'=>'Voucher','slug'=>'voucher']);
+        $item = ProductItem::create(['product_id'=>$product->id,'name'=>'Voucher','buy_price'=>'10000','sell_price'=>'15000','is_active'=>true]);
+        $client = Mockery::mock(BelibayarClient::class);
+        $client->shouldReceive('charge')->once()->andReturnUsing(fn ($body) => [
+            'reference'=>$body['reference'],'transaction_id'=>'byrtrx_invalid','payment_channel'=>'BRI',
+            'amount'=>$body['amount'],'status'=>'pending','expired_at'=>now()->addHour()->timestamp,
+            'va_number'=>$provided,
+        ]);
+        $this->app->instance(BelibayarClient::class, $client);
+
+        try {
+            app(OrderService::class)->place([
+                'product_item_id'=>$item->id,'payment_channel'=>'BRI','customer_data'=>['user_id'=>'123'],
+                'customer_phone'=>'081234567890','customer_email'=>'buyer@example.com',
+            ]);
+            $this->fail('Invalid payment code must be rejected.');
+        } catch (\App\Services\Payment\PaymentException $e) {
+            $this->assertSame('Kode pembayaran dari gateway tidak valid.', $e->getMessage());
+        }
+        $this->assertSame(0, Transaction::count());
+    }
+
+    public static function invalidVaProvider(): array
+    {
+        return [
+            'spaces only' => ['   '],
+            'tab' => ["  5788\t9300"],
+            'newline' => ["  5788\n9300"],
+            'non-breaking space' => ["  5788\u{00A0}9300"],
+            'zero-width space' => ["  5788\u{200B}9300"],
+            'punctuation' => ['  5788;9300'],
+            'too long' => ['  '.str_repeat('7', 41)],
+            'invalid leading punctuation' => ['  -57889300033021963'],
+        ];
     }
 
     public function test_historical_transaction_is_not_mislabeled_as_belibayar(): void
