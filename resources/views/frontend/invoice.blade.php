@@ -40,20 +40,26 @@
                 && ! $isStreaming;
             $cs = $isManual ? \App\Support\SupportContact::resolve() : [];
             $manualWaUrl = null;
-            if ($isManual && ($cs['whatsapp'] ?? null) !== null) {
-                $productName = $transaction->productItem?->product?->name ?? 'Produk';
-                $itemName = $transaction->productItem?->name ?? '';
-                $detailLines = collect($transaction->customer_data ?? [])
-                    ->filter(fn ($v) => trim((string) $v) !== '')
-                    ->map(fn ($v, $k) => '- '.$k.': '.$v)
-                    ->implode("\n");
-                $waText = "Halo Admin CAPTSHOP, saya sudah bayar pesanan:\n\n"
-                    ."Invoice: {$transaction->invoice_id}\n"
-                    ."Produk: {$productName}".($itemName !== '' ? " — {$itemName}" : '')."\n"
-                    ."Total: Rp ".number_format((float) $transaction->total, 0, ',', '.')."\n"
-                    .($detailLines !== '' ? "\nData:\n{$detailLines}\n" : '')
-                    ."\nMohon dibantu proses ya min. Terima kasih.";
-                $manualWaUrl = 'https://wa.me/'.$cs['whatsapp'].'?text='.rawurlencode($waText);
+            if ($isManual) {
+                // Nomor WA khusus per-produk (mis. Roblox) bila diisi admin,
+                // selain itu fallback ke nomor CS global dari site_settings.
+                $waNumber = \App\Support\SupportContact::normalizeWhatsapp($transaction->productItem?->product?->contact_whatsapp ?? null)
+                    ?? ($cs['whatsapp'] ?? null);
+                if ($waNumber !== null) {
+                    $productName = $transaction->productItem?->product?->name ?? 'Produk';
+                    $itemName = $transaction->productItem?->name ?? '';
+                    $detailLines = collect($transaction->customer_data ?? [])
+                        ->filter(fn ($v) => trim((string) $v) !== '')
+                        ->map(fn ($v, $k) => '- '.$k.': '.$v)
+                        ->implode("\n");
+                    $waText = "Halo Admin CAPTSHOP, saya sudah bayar pesanan:\n\n"
+                        ."Invoice: {$transaction->invoice_id}\n"
+                        ."Produk: {$productName}".($itemName !== '' ? " — {$itemName}" : '')."\n"
+                        ."Total: Rp ".number_format((float) $transaction->total, 0, ',', '.')."\n"
+                        .($detailLines !== '' ? "\nData:\n{$detailLines}\n" : '')
+                        ."\nMohon dibantu proses ya min. Terima kasih.";
+                    $manualWaUrl = 'https://wa.me/'.$waNumber.'?text='.rawurlencode($waText);
+                }
             }
             // CapCut: tampilkan sisa masa aktif persis (akun diskon tidak
             // mendapatkan 1 bulan penuh sejak pembelian).

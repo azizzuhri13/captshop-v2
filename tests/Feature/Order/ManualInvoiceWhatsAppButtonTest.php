@@ -88,6 +88,65 @@ class ManualInvoiceWhatsAppButtonTest extends TestCase
         $response->assertSee('Rp 79.000');
     }
 
+    public function test_product_contact_whatsapp_overrides_global_cs_number(): void
+    {
+        // Roblox punya nomor WA khusus; invoice harus memakainya, bukan nomor CS global.
+        $category = Category::firstOrCreate(['slug' => 'games'], ['name' => 'Games', 'is_active' => true]);
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'Roblox',
+            'slug' => 'roblox-manual-wa-override',
+            'supplier_type' => 'manual',
+            'contact_whatsapp' => '0851-2450-1717', // berformat tampilan, dinormalkan di view
+            'is_active' => true,
+        ]);
+        $item = ProductItem::create([
+            'product_id' => $product->id,
+            'name' => '400 Robux',
+            'buy_price' => 54000,
+            'sell_price' => 60000,
+            'is_active' => true,
+        ]);
+        $trx = $this->makeTransaction($item, 'processing');
+
+        $response = $this->get(route('invoice.show', $trx->invoice_id));
+
+        $response->assertStatus(200);
+        $response->assertSee('Hubungi WhatsApp Admin');
+        // Nomor khusus produk (dinormalkan ke 62 prefix), bukan nomor CS global.
+        $response->assertSee('https://wa.me/6285124501717?text=', false);
+        $response->assertDontSee('https://wa.me/628123456789?text=', false);
+    }
+
+    public function test_invalid_product_contact_whatsapp_falls_back_to_cs_number(): void
+    {
+        // Nomor produk tak valid (bukan pola Indonesia) -> fallback ke CS global, tanpa URL berbahaya.
+        $category = Category::firstOrCreate(['slug' => 'games'], ['name' => 'Games', 'is_active' => true]);
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'Roblox',
+            'slug' => 'roblox-manual-wa-invalid',
+            'supplier_type' => 'manual',
+            'contact_whatsapp' => '12345',
+            'is_active' => true,
+        ]);
+        $item = ProductItem::create([
+            'product_id' => $product->id,
+            'name' => '400 Robux',
+            'buy_price' => 54000,
+            'sell_price' => 60000,
+            'is_active' => true,
+        ]);
+        $trx = $this->makeTransaction($item, 'processing');
+
+        $response = $this->get(route('invoice.show', $trx->invoice_id));
+
+        $response->assertStatus(200);
+        $response->assertSee('Hubungi WhatsApp Admin');
+        $response->assertSee('https://wa.me/628123456789?text=', false);
+        $response->assertDontSee('https://wa.me/12345', false);
+    }
+
     public function test_manual_invoice_wa_url_contains_invoice_product_total_and_customer_data(): void
     {
         [, $item] = $this->makeManualProduct('roblox-manual');

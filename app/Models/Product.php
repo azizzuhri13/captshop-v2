@@ -23,6 +23,7 @@ class Product extends Model
         'input_fields',
         'supplier_type',
         'supplier_code',
+        'contact_whatsapp',
         'is_popular',
         'is_active',
         'sort_order',
