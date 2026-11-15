@@ -32,6 +32,29 @@
             $isCanva = ($transaction->productItem?->product?->slug === 'canva-pro') || $transaction->canvaAccount !== null;
             $isCapcut = ($transaction->productItem?->product?->slug === 'capcut') || $transaction->capcutAccount !== null;
             $isStreaming = $isNetflix || $isDisney || $isCanva || $isCapcut;
+            // Produk manual (supplier_type = manual, mis. Roblox manual): dibayar
+            // lalu dikerjakan admin via WhatsApp, bukan otomatis lewat supplier.
+            // Streaming manual (Netflix/Disney+/Canva/CapCut) punya kartu WA amber
+            // tersendiri — kartu manual baru hanya untuk produk non-streaming.
+            $isManual = strtolower((string) ($transaction->productItem?->product?->supplier_type ?? '')) === 'manual'
+                && ! $isStreaming;
+            $cs = $isManual ? \App\Support\SupportContact::resolve() : [];
+            $manualWaUrl = null;
+            if ($isManual && ($cs['whatsapp'] ?? null) !== null) {
+                $productName = $transaction->productItem?->product?->name ?? 'Produk';
+                $itemName = $transaction->productItem?->name ?? '';
+                $detailLines = collect($transaction->customer_data ?? [])
+                    ->filter(fn ($v) => trim((string) $v) !== '')
+                    ->map(fn ($v, $k) => '- '.$k.': '.$v)
+                    ->implode("\n");
+                $waText = "Halo Admin CAPTSHOP, saya sudah bayar pesanan:\n\n"
+                    ."Invoice: {$transaction->invoice_id}\n"
+                    ."Produk: {$productName}".($itemName !== '' ? " — {$itemName}" : '')."\n"
+                    ."Total: Rp ".number_format((float) $transaction->total, 0, ',', '.')."\n"
+                    .($detailLines !== '' ? "\nData:\n{$detailLines}\n" : '')
+                    ."\nMohon dibantu proses ya min. Terima kasih.";
+                $manualWaUrl = 'https://wa.me/'.$cs['whatsapp'].'?text='.rawurlencode($waText);
+            }
             // CapCut: tampilkan sisa masa aktif persis (akun diskon tidak
             // mendapatkan 1 bulan penuh sejak pembelian).
             $capcutTerm = null;
@@ -299,6 +322,43 @@
                     @endif
                 </div>
             </div>
+        @endif
+
+        {{-- Kotak WhatsApp Admin untuk produk manual (Roblox manual, dsb): dibayar lalu diproses admin lewat WA --}}
+        @if ($isManual && $manualWaUrl !== null && in_array($transaction->status, ['processing', 'paid'], true))
+            <section class="overflow-hidden rounded-2xl border-2 border-emerald-500/50 bg-gradient-to-b from-emerald-950/20 via-slate-900 to-slate-950 p-5 shadow-2xl shadow-emerald-500/10 relative">
+                <div class="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-emerald-500/15 blur-2xl pointer-events-none"></div>
+
+                <div class="flex items-start gap-3.5">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/15 border border-emerald-500/40">
+                        <svg class="h-6 w-6 fill-current text-emerald-400" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300 tracking-wide uppercase">Pembayaran Diterima</span>
+                            <span class="text-xs text-slate-400">{{ $transaction->productItem?->product?->name }}{{ ($transaction->productItem?->name ?? '') !== '' ? ' · '.$transaction->productItem?->name : '' }}</span>
+                        </div>
+                        <h2 class="font-heading text-base font-bold text-slate-100 mt-1">Lunas! Lanjut ke WhatsApp Admin</h2>
+                        <p class="text-xs text-slate-300/90 mt-1.5 leading-relaxed">
+                            Pesanan sebesar <strong class="text-emerald-400">Rp {{ number_format((float) $transaction->total, 0, ',', '.') }}</strong> sudah terverifikasi lunas. Pengiriman untuk paket ini dikerjakan admin lewat WhatsApp — klik tombol di bawah, pesan invoice sudah terisi otomatis.
+                        </p>
+                    </div>
+                </div>
+
+                <a href="{{ $manualWaUrl }}" target="_blank" rel="noopener" class="mt-5 flex w-full items-center justify-center gap-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-3 px-4 font-heading text-sm font-bold text-white shadow-lg shadow-emerald-600/30 transition transform active:scale-98">
+                    <svg class="h-5 w-5 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/>
+                    </svg>
+                    <span>Hubungi WhatsApp Admin</span>
+                </a>
+
+                <div class="mt-3 rounded-lg bg-slate-900 border border-slate-800 p-2.5 text-[11px] text-slate-400">
+                    <span class="text-slate-500 font-bold block mb-1">Invoice</span>
+                    <span class="font-mono text-slate-300">{{ $transaction->invoice_id }} · Rp {{ number_format((float) $transaction->total, 0, ',', '.') }}</span>
+                </div>
+            </section>
         @endif
 
         {{-- Countdown batas pembayaran --}}
