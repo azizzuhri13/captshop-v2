@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\SiteSetting;
+use App\Services\Notification\WhatsAppGatewayStatus;
 use App\Support\Credentials;
 use App\Support\PaymentGateway;
 use Illuminate\Http\RedirectResponse;
@@ -57,9 +58,6 @@ class SettingController extends Controller
         'tokovoucher_signature' => 'Tokovoucher Signature Default (Opsional)',
         'tokovoucher_base_url' => 'Tokovoucher Base URL',
 
-        // Integrasi — WhatsApp Gateway (Fonnte)
-        'fonnte_token' => 'Fonnte Token',
-        'fonnte_base_url' => 'Fonnte Base URL',
     ];
 
     /**
@@ -76,7 +74,6 @@ class SettingController extends Controller
         'digiflazz_api_key',
         'tokovoucher_secret_key',
         'tokovoucher_signature',
-        'fonnte_token',
     ];
 
     /**
@@ -94,7 +91,7 @@ class SettingController extends Controller
      */
     protected const UPLOAD_DIR = 'settings';
 
-    public function edit(): View
+    public function edit(WhatsAppGatewayStatus $gatewayStatus): View
     {
         $settings = SiteSetting::query()
             ->whereIn('key', array_keys(self::SETTINGS))
@@ -110,6 +107,7 @@ class SettingController extends Controller
             'tripayReadiness' => PaymentGateway::tripayReadiness(),
             'tripayCallbackUrl' => (string) config('payment.tripay.callback_url'),
             'tripayMode' => strtolower(trim((string) Credentials::get('tripay_mode', config('payment.tripay.mode', 'sandbox')))),
+            'whatsappGatewayStatus' => $gatewayStatus->check(),
         ]);
     }
 

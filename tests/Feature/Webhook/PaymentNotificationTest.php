@@ -162,7 +162,7 @@ class PaymentNotificationTest extends TestCase
 
         $this->assertNotNull($transaction);
 
-        // Email invoice terkirim; WhatsApp aman di-skip (token Fonnte kosong di testing).
+        // Email invoice terkirim; gateway tidak dikonfigurasi pada test.
         Mail::assertSent(InvoiceMail::class, fn ($mail) => $mail->transaction->invoice_id === $transaction->invoice_id);
         Mail::assertSent(InvoiceMail::class, 1);
     }

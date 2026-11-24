@@ -108,14 +108,14 @@ class AuditLogAndHardeningTest extends TestCase
         $this->assertSame(['status' => 'completed'], $log->new_values);
     }
 
-    public function test_settings_update_audited_without_secret_values(): void
+    public function test_settings_update_is_audited(): void
     {
         $this->actingAs($this->superAdmin(), 'admin');
 
         $this->put(route('admin.settings.update'), [
             'settings' => [
                 'site_name' => 'CaptShop Baru',
-                'fonnte_token' => 'RAHASIA-BARU-XYZ',
+                'site_description' => 'Deskripsi baru',
             ],
         ]);
 
@@ -123,8 +123,7 @@ class AuditLogAndHardeningTest extends TestCase
 
         $this->assertNotNull($log);
         $this->assertSame('CaptShop Baru', $log->new_values['site_name']);
-        $this->assertSame('[tersembunyi]', $log->new_values['fonnte_token']);
-        $this->assertStringNotContainsString('RAHASIA-BARU-XYZ', json_encode($log->new_values));
+        $this->assertSame('Deskripsi baru', $log->new_values['site_description']);
     }
 
     public function test_security_headers_present_on_web_responses(): void

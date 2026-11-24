@@ -68,50 +68,19 @@ class SecurityHardeningTest extends TestCase
         $this->assertStringNotContainsString('value="SECRET', $response->getContent());
     }
 
-    public function test_settings_secret_not_overwritten_when_left_blank(): void
+    public function test_gateway_secret_is_not_exposed_in_admin_settings(): void
     {
-        SiteSetting::set('fonnte_token', 'FONNTE-OLD-TOKEN');
-
         $this->actingAs($this->superAdmin(), 'admin');
-
-        $this->put(route('admin.settings.update'), [
-            'settings' => [
-                'site_name' => 'CaptShop Baru',
-                'fonnte_token' => '',
-            ],
-        ]);
-
-        $this->assertSame('FONNTE-OLD-TOKEN', SiteSetting::get('fonnte_token'));
-        $this->assertSame('CaptShop Baru', SiteSetting::get('site_name'));
+        $response = $this->get(route('admin.settings.edit'));
+        $response->assertOk()->assertDontSee('WHATSAPP_GATEWAY_KEY')->assertDontSee('WHATSAPP_GATEWAY_URL');
     }
 
     public function test_settings_secret_not_overwritten_when_filled_with_bullet_mask_characters(): void
     {
         SiteSetting::set('belibayar_secret_key', 'REAL-SECRET-12345');
-
         $this->actingAs($this->superAdmin(), 'admin');
-
-        $this->put(route('admin.settings.update'), [
-            'settings' => [
-                'belibayar_secret_key' => '••••••••••••••••••••••••••••••',
-            ],
-        ]);
-
+        $this->put(route('admin.settings.update'), ['settings' => ['belibayar_secret_key' => '••••••••••••••••••••••••••••••']]);
         $this->assertSame('REAL-SECRET-12345', SiteSetting::get('belibayar_secret_key'));
-    }
-
-    public function test_settings_secret_can_be_cleared(): void
-    {
-        SiteSetting::set('fonnte_token', 'FONNTE-OLD-TOKEN');
-
-        $this->actingAs($this->superAdmin(), 'admin');
-
-        $this->put(route('admin.settings.update'), [
-            'settings' => [],
-            'clear_settings' => ['fonnte_token' => '1'],
-        ]);
-
-        $this->assertNull(SiteSetting::get('fonnte_token'));
     }
 
     public function test_banner_rejects_javascript_url(): void

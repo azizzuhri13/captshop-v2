@@ -31,9 +31,12 @@ return [
         ],
     ],
 
-    'fonnte' => [
-        'token' => env('FONNTE_TOKEN'),
-        'base_url' => env('FONNTE_BASE_URL', 'https://api.fonnte.com'),
+    'whatsapp_gateway' => [
+        'url' => env('WHATSAPP_GATEWAY_URL', 'http://127.0.0.1:3213'),
+        'key' => env('WHATSAPP_GATEWAY_KEY'),
+        // Status and delivery calls are deliberately bounded below two seconds.
+        'connect_timeout' => 1,
+        'timeout' => 1,
     ],
 
     'google' => [

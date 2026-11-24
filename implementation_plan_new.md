@@ -293,7 +293,7 @@ sequenceDiagram
 ### 3.5 Fitur Pendukung
 
 #### 3.5.1 Notifikasi
-- **WhatsApp** (via Fonnte/WooWA/WA Gateway) — notifikasi pembelian, status transaksi
+- **WhatsApp** (via local WA Gateway) — notifikasi pembelian, status transaksi
 - **Email** (via SMTP / Mailtrap / Mailgun) — invoice, receipt, promo
 
 #### 3.5.2 SEO & Performance
@@ -852,7 +852,7 @@ return [
 
 3. **Supplier**: Prefer **DigiFlazz** atau supplier lain? Apakah sudah punya akun API?
 
-4. **Notifikasi WhatsApp**: Apakah sudah punya layanan WA Gateway (Fonnte, WooWA, dll)?
+4. **Notifikasi WhatsApp**: Apakah layanan WA Gateway lokal sudah tersedia?
 
 5. **Color Scheme**: Apakah setuju dengan dark theme purple-based? Atau ada preferensi warna lain?
 

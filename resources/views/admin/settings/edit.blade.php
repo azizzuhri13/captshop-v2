@@ -57,7 +57,6 @@
             '🔌 Supplier Utama (Default)' => ['supplier_default'],
             '🔌 Supplier (DigiFlazz)' => ['digiflazz_username', 'digiflazz_api_key', 'digiflazz_base_url'],
             '🔌 Supplier (Tokovoucher / Apigames)' => ['tokovoucher_member_code', 'tokovoucher_secret_key', 'tokovoucher_signature', 'tokovoucher_base_url'],
-            '💬 WhatsApp Gateway (Fonnte)' => ['fonnte_token', 'fonnte_base_url'],
         ] as $sectionTitle => $keys)
             <section class="rounded-xl border border-primary/30 bg-primary/5 p-5">
                 <h2 class="mb-4 font-heading text-sm font-bold text-slate-200">{{ $sectionTitle }}</h2>
@@ -400,5 +399,24 @@
             <p class="mt-2 text-xs text-red-400">{{ $message }}</p>
         @enderror
         <p class="mt-2 text-[11px] text-slate-500">Rollback: pilih Belibayar lalu Terapkan. Tidak perlu mengubah .env atau config.</p>
+    </section>
+
+    {{-- Status saja: endpoint gateway dipanggil server-side oleh controller.
+         Tidak ada aksi pairing, reset, logout, atau kirim pesan dari panel. --}}
+    <section class="rounded-xl border border-slate-700 bg-slate-800/40 p-5" aria-labelledby="whatsapp-gateway-heading">
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h2 id="whatsapp-gateway-heading" class="font-heading text-sm font-bold text-slate-200">📱 WhatsApp Gateway</h2>
+            <span class="rounded-full px-2 py-0.5 text-[11px] font-medium {{ $whatsappGatewayStatus['state'] === 'connected' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-300' }}">
+                {{ $whatsappGatewayStatus['state'] === 'connected' ? 'Terhubung' : ($whatsappGatewayStatus['state'] === 'disconnected' ? 'Terputus' : 'Tidak tersedia') }}
+            </span>
+        </div>
+        <p class="text-[11px] text-slate-500">{{ $whatsappGatewayStatus['detail'] }}</p>
+        <dl class="mt-4 grid grid-cols-1 gap-3 text-[11px] text-slate-400 sm:grid-cols-2">
+            <div><dt class="text-slate-500">Pengirim</dt><dd class="font-mono text-slate-300">{{ $whatsappGatewayStatus['sender'] ?? '—' }}</dd></div>
+            <div><dt class="text-slate-500">Terakhir terhubung</dt><dd class="font-mono text-slate-300">{{ $whatsappGatewayStatus['last_connected_at'] ?? '—' }}</dd></div>
+            <div><dt class="text-slate-500">Terakhir terputus</dt><dd class="font-mono text-slate-300">{{ $whatsappGatewayStatus['last_disconnected_at'] ?? '—' }}</dd></div>
+            <div><dt class="text-slate-500">Antrean</dt><dd class="text-slate-300">{{ $whatsappGatewayStatus['queue']['queued'] ?? 0 }} queued · {{ $whatsappGatewayStatus['queue']['retryable'] ?? 0 }} retryable · {{ $whatsappGatewayStatus['queue']['failed'] ?? 0 }} gagal</dd></div>
+        </dl>
+        <p class="mt-2 text-[11px] text-slate-600">Panel ini hanya menampilkan status read-only. Pengelolaan sesi dilakukan pada host gateway.</p>
     </section>
 @endsection

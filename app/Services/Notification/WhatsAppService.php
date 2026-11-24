@@ -4,51 +4,76 @@ namespace App\Services\Notification;
 
 use App\Models\SiteSetting;
 use App\Models\Transaction;
-use App\Support\Credentials;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\URL;
 
 class WhatsAppService
 {
     /**
-     * Kirim notifikasi WhatsApp ke pelanggan.
-     *
-     * @param  array<string, string>  $params  Parameter Fonnte tambahan (countryCode, dst).
+     * Kirim teks ke gateway lokal; kegagalan transport tidak menggagalkan transaksi.
      */
-    public function send(string $phone, string $message, array $params = []): bool
+    public function send(string $phone, string $message, string $invoiceId, string $event): bool
     {
-        $token = Credentials::get('fonnte_token', config('services.fonnte.token'));
-        $baseUrl = Credentials::get('fonnte_base_url', config('services.fonnte.base_url'));
+        $phone = $this->normalizePhone($phone);
+        $key = (string) config('services.whatsapp_gateway.key', '');
+        $baseUrl = LocalGatewayUrl::sanitize((string) config('services.whatsapp_gateway.url', ''));
 
-        if (empty($token)) {
-            Log::warning('Fonnte token kosong, notifikasi WhatsApp dilewati.');
-
-            return false;
-        }
-
-        $response = Http::baseUrl(rtrim((string) $baseUrl, '/'))
-            ->timeout(15)
-            ->withHeaders(['Authorization' => $token])
-            ->post('/send', array_merge([
-                'target' => $phone,
-                'message' => $message,
-            ], $params));
-
-        if (! $response->successful()) {
-            Log::error('Gagal kirim WhatsApp via Fonnte.', [
-                'status' => $response->status(),
-                'body' => $response->json(),
-            ]);
+        // Fail closed: never send (and never log the key or destination) when
+        // the endpoint is not an approved loopback address.
+        if ($phone === null || $key === '' || $baseUrl === null) {
+            Log::warning('Notifikasi WhatsApp dilewati: konfigurasi atau nomor tujuan tidak valid.');
 
             return false;
         }
 
-        return true;
+        try {
+            $response = Http::baseUrl($baseUrl)
+                // Never let the local adapter hold an order request open.
+                ->connectTimeout(1)
+                ->timeout(1)
+                ->withHeaders([
+                    'X-Internal-Key' => $key,
+                    'Idempotency-Key' => "transaction:{$invoiceId}:event:{$event}",
+                ])
+                ->post('/v1/messages/text', [
+                    'to' => $phone,
+                    'text' => $message,
+                    'metadata' => [
+                        'invoice_id' => $invoiceId,
+                        'event' => $event,
+                        'source' => 'captshop-laravel',
+                    ],
+                ]);
+
+            if (! $response->successful()) {
+                Log::warning('WhatsApp gateway menolak notifikasi.', ['status' => $response->status()]);
+
+                return false;
+            }
+
+            return true;
+        } catch (\Throwable) {
+            // Jangan log exception/request body yang bisa mengandung teks pesan atau key.
+            Log::warning('WhatsApp gateway tidak dapat dijangkau.');
+
+            return false;
+        }
     }
 
-    /**
-     * Notifikasi pesanan berhasil dibuat (menunggu pembayaran).
-     */
+    private function normalizePhone(string $phone): ?string
+    {
+        $digits = preg_replace('/\D+/', '', trim($phone)) ?? '';
+        if (str_starts_with($digits, '0')) {
+            $digits = '62'.substr($digits, 1);
+        } elseif (str_starts_with($digits, '8')) {
+            $digits = '62'.$digits;
+        }
+
+        return preg_match('/^62[0-9]{8,13}$/', $digits) === 1 ? $digits : null;
+    }
+
+    /** Notifikasi pesanan berhasil dibuat (menunggu pembayaran). */
     public function sendInvoiceNotification(Transaction $transaction): bool
     {
         $message = implode("\n", [
@@ -60,15 +85,13 @@ class WhatsAppService
             'Total: *Rp '.number_format((float) $transaction->total, 0, ',', '.').'*',
             '',
             'Silakan selesaikan pembayaran sebelum '.$transaction->expired_at?->format('d M Y H:i').' WIB.',
-            'Detail invoice: '.\Illuminate\Support\Facades\URL::signedRoute('invoice.show', ['invoiceId' => $transaction->invoice_id]),
+            'Detail invoice: '.URL::signedRoute('invoice.show', ['invoiceId' => $transaction->invoice_id]),
         ]);
 
-        return $this->send($transaction->customer_phone, $message);
+        return $this->send($transaction->customer_phone, $message, $transaction->invoice_id, 'created');
     }
 
-    /**
-     * Notifikasi pembayaran diterima (pesanan diproses).
-     */
+    /** Notifikasi pembayaran diterima (pesanan diproses). */
     public function sendPaidNotification(Transaction $transaction): bool
     {
         $message = implode("\n", [
@@ -81,12 +104,10 @@ class WhatsAppService
             'Pesanan Anda sedang diproses, mohon tunggu sebentar ya!',
         ]);
 
-        return $this->send($transaction->customer_phone, $message);
+        return $this->send($transaction->customer_phone, $message, $transaction->invoice_id, 'paid');
     }
 
-    /**
-     * Notifikasi pesanan berhasil (top-up berhasil diproses).
-     */
+    /** Notifikasi pesanan berhasil tanpa membocorkan data supplier. */
     public function sendSuccessNotification(Transaction $transaction): bool
     {
         $message = implode("\n", [
@@ -94,12 +115,11 @@ class WhatsAppService
             '',
             'Pesanan *'.$transaction->invoice_id.'* telah berhasil diproses. 🎉',
             'Item: '.$transaction->productItem?->name,
-            $transaction->supplier_sn ? 'SN: '.$transaction->supplier_sn : null,
-            'Detail pesanan & kredensial: '.\Illuminate\Support\Facades\URL::signedRoute('invoice.show', ['invoiceId' => $transaction->invoice_id]),
+            'Detail pesanan: '.URL::signedRoute('invoice.show', ['invoiceId' => $transaction->invoice_id]),
             '',
             'Terima kasih sudah berbelanja di '.(SiteSetting::get('site_name') ?? 'CAPTSHOP').'!',
         ]);
 
-        return $this->send($transaction->customer_phone, $message);
+        return $this->send($transaction->customer_phone, $message, $transaction->invoice_id, 'completed');
     }
 }
