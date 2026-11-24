@@ -86,11 +86,54 @@ npm run pair -- --phone 628123456789
 - `--phone` must be digits only with the country code (`62...`).
 - The pairing code is printed **once** to your terminal. It is never logged and
   never persisted. Enter it in WhatsApp > Linked devices > Link with phone number.
+- A code is printed **only after WhatsApp acknowledged the request**. If the
+  server rejects the `companion_hello` IQ (for example `400 bad-request`), the
+  command fails with the server's reason and prints no code.
 - If a session is already registered the command refuses and exits non-zero.
   v1 has no re-pair or reset command: discarding a live session is destructive
   and out of scope. Do not delete `data/gateway.db` to work around this without
   understanding that it drops the linked device.
 - `--timeout-seconds N` bounds how long it waits for the code (default 180).
+
+### Why the gateway does not call `socket.requestPairingCode()`
+
+baileys `7.0.0-rc14` implements pairing optimistically (`lib/Socket/socket.js`):
+it mints the code locally, sets `creds.me`, emits `creds.update` — which we
+persist — and only *then* sends the `link_code_companion_reg` IQ with
+`sendNode()`, fire and forget. Two consequences:
+
+1. A server rejection arrives after the code has already been returned, so the
+   operator gets an 8-character code that can never link.
+2. `companion_platform_display` is built as `${browser[1]} (${browser[0]})`, so
+   a custom label sends `Chrome (CAPTSHOP Gateway)`, which WhatsApp's stricter
+   `companion_hello` validator rejects with `400 bad-request`.
+
+`src/pairing.ts` therefore re-implements only the request/acknowledgement step
+against Baileys' public API (`query`, `derivePairingCodeKey`, `aesEncryptCTR`,
+`bytesToCrockford`, `jidEncode`):
+
+- `canonicalPairingPlatform()` maps the configured browser tuple onto the
+  canonical `companion_platform_id`/`companion_platform_display` pair
+  (`Chrome (Mac OS)` for the shipped `['CAPTSHOP Gateway', 'Chrome', '1.0.0']`).
+  The tuple itself is unchanged for registration, so `clientPayload` still
+  advertises the CAPTSHOP label.
+- the IQ goes through `query()`, so a `<iq type='error'>` reply rejects before
+  any code is returned or any creds are stored;
+- `creds.me` is written and `saveCreds()` runs only after the server accepts,
+  and the transient `creds.pairingCode` is rolled back on failure.
+
+Upstream references: PR #2559 (`fix: harden pairing code request flow`, still
+open/unmerged) documents both defects. This is a local, tested re-implementation
+of the same behaviour rather than a cherry-pick.
+
+### Post-pair `515 restartRequired`
+
+After the phone confirms, WhatsApp asks the companion to reconnect with
+`DisconnectReason.restartRequired` (515). `WhatsAppConnection` treats that as a
+normal disconnect, reconnects with backoff, and only then reports `open`. The
+CLI keeps running until that `open` event or the timeout, so a successful
+pairing is reported by `paired: session is connected and credentials are
+stored.` and not by the moment the code was entered.
 
 Check state at any time (works while the gateway is stopped):
 
@@ -197,7 +240,14 @@ Covers, with a fake Baileys socket and no network access:
 - graceful shutdown releases claimed work;
 - no secrets or message text in logs;
 - loopback-only bind (every non-loopback host rejected); CLI refuses re-pairing
-  and has no reset flag.
+  and has no reset flag;
+- pairing-code request path: canonical `companion_platform_display`/`_id`
+  normalization (including the shipped CAPTSHOP label), the exact
+  `<iq type='error'><error code='400' text='bad-request'/></iq>` reply yielding
+  no code and an unpaired auth store, a successful IQ returning the code only
+  after the result, the pairing-ready gate (and its re-arming on disconnect),
+  rejection of a concurrent second request, the CLI deadline bounding a stalled
+  request, and retryability classification.
 
 No test pairs a real number or sends a real WhatsApp message.
 
@@ -211,8 +261,43 @@ These are deliberate v1 boundaries, not oversights:
   `makeWASocket` handshake behaviour (protocol-version fetch, QR fallback,
   LID migration) is unverified until a controlled pairing run.
 - **Pairing is unverified end to end.** `npm run pair` is covered for argument
-  validation, refusal-on-registered-session, corrupt-store refusal and
-  no-reset-flag, but the live pairing-code exchange has never been run.
+  validation, refusal-on-registered-session, corrupt-store refusal,
+  no-reset-flag, the pairing-ready gate, canonical platform normalization and
+  the reject-before-code contract — all against mocked IQ nodes. The live
+  pairing-code exchange against WhatsApp has still never been run, so the
+  canonical values are validated against upstream's report and WhatsApp's
+  observed validator, not against a real `companion_hello` acceptance here.
+- **`companion_reg_refresh` is NOT handled (known unresolved limitation).**
+  The server can send `<notification type="companion_reg_refresh">` to an
+  unpaired companion to retire the registration material it is advertising.
+  Baileys 7.0.0-rc14 has no handler: `handleNotification` acks it and
+  `processNotification` drops it, leaving a stale `advSecretKey`. Upstream
+  PR #2765 (open, unmerged, `unstable`) fixes it, but the patch is not
+  extractable as a minimal subset: it adds `makePairingQRRenderer` and
+  restructures the `CB:iq,type:set,pair-device` QR generator so the adv secret
+  is read per render, and it separately rewrites `sendMessageAck` to work before
+  login (the pre-login ack crash it needs is #2749's fix). Those are
+  `socket.ts`/`messages-recv.ts` internals; the gateway only sees `socket.ev`
+  and does not fork Baileys.
+  Two facts bound the residual risk instead of hand-waving it:
+  1. The refresh exists so a client re-renders the **QR** with a live secret.
+     This gateway never shows a QR: it consumes `connection.update.qr` only as
+     the "pairing handshake started" readiness signal and prints nothing but
+     the pairing code. There is no operator-visible QR that could go stale, and
+     the `companion_hello` IQ carries only `noiseKey.public` plus the wrapped
+     ephemeral key — never `advSecretKey`.
+  2. Upstream's own handler deliberately **skips rotation when `creds.me` is
+     set**, because `advSecretKey` is what a pending or completed pairing is
+     verified against (`configureSuccessfulPairing` reads it to check the
+     pair-success HMAC). Our flow sets `creds.me` as soon as `companion_hello`
+     is acknowledged — i.e. before `pair-success` can arrive — so for exactly
+     the window where the adv secret still matters, upstream would ignore the
+     refresh too. Rotating it here would deviate from upstream semantics and
+     could break a pairing that would otherwise succeed.
+  The remaining exposure is narrow and fails visibly: a refresh that lands
+  before `companion_hello` is acknowledged is dropped, and if the server then
+  rejects the pair-success signature the CLI reports a failed pairing
+  (non-zero exit, no code printed) instead of silently stalling.
 - **`loggedOut` terminal-fails pending and in-flight messages**
   (`SESSION_LOGGED_OUT`). This is a deliberate choice to fail visibly instead of
   holding an unbounded queue that may never drain; the trade-off is that a

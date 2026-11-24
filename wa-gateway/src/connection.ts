@@ -1,8 +1,9 @@
 import { EventEmitter } from 'node:events';
 import makeWASocket, { DisconnectReason, fetchLatestBaileysVersion } from 'baileys';
-import type { AuthenticationState, WAVersion } from 'baileys';
+import type { AuthenticationState, BinaryNode, WABrowserDescription, WAVersion } from 'baileys';
 import type { Logger } from './logger.ts';
 import type { SessionStore, SessionState } from './session-store.ts';
+import { pairingError, requestPairingCodeAwaitingResult } from './pairing.ts';
 
 /**
  * Minimal surface of a Baileys socket that the gateway depends on. Narrowing
@@ -18,7 +19,13 @@ export type SocketLike = {
     on(event: 'message-receipt.update', handler: (updates: ReceiptUpdate[]) => void): void;
   };
   sendMessage(jid: string, content: { text: string }): Promise<{ key?: { id?: string | null } | null } | undefined>;
-  requestPairingCode?(phone: string): Promise<string>;
+  /**
+   * Baileys' IQ helper: sends a node and awaits the matching `TAG:` response,
+   * throwing on an `type='error'` reply. Required for pairing, where we must
+   * see the server's verdict before showing a code.
+   */
+  query?(node: BinaryNode, timeoutMs?: number): Promise<unknown>;
+  generateMessageTag?(): string;
   end?(error?: Error): void;
 };
 
@@ -57,6 +64,11 @@ export type ConnectionOptions = {
   events: ConnectionEvents;
   /** Injected in tests; defaults to real Baileys. */
   socketFactory?: SocketFactory;
+  /**
+   * Baileys browser tuple. Kept as the CAPTSHOP label for registration; only
+   * the pairing-code stanza is canonicalized (see `canonicalPairingPlatform`).
+   */
+  browser?: WABrowserDescription;
   /** Bounded exponential reconnect backoff. */
   reconnectBaseMs: number;
   reconnectMaxMs: number;
@@ -64,6 +76,15 @@ export type ConnectionOptions = {
   random?: () => number;
   /** Reconnect timer override (tests use a fake clock). */
   schedule?: (fn: () => void, ms: number) => { cancel: () => void };
+};
+
+/** Default browser tuple; also the value normalized away for pairing codes. */
+export const DEFAULT_BROWSER: WABrowserDescription = ['CAPTSHOP Gateway', 'Chrome', '1.0.0'];
+
+/** Someone blocked on the pairing handshake starting. */
+type PairingWaiter = {
+  resolve: () => void;
+  reject: (reason: string) => void;
 };
 
 const defaultSchedule = (fn: () => void, ms: number): { cancel: () => void } => {
@@ -109,6 +130,19 @@ export class WhatsAppConnection {
   private version: WAVersion | null = null;
   private readonly events: ConnectionEvents;
   private readonly logger: Logger;
+  /** Browser tuple advertised to WhatsApp (see `DEFAULT_BROWSER`). */
+  private readonly browser: WABrowserDescription;
+
+  /**
+   * True once the server has started the pairing handshake. Baileys surfaces
+   * that as the first `connection.update` carrying a `qr` payload (the
+   * `pair-device` stanza). Requesting a code earlier is rejected by WhatsApp,
+   * so `requestPairingCode()` waits for this instead of firing blind.
+   */
+  private pairingReady = false;
+  private pairingWaiters: PairingWaiter[] = [];
+  /** Rejects a second concurrent pairing request (upstream PR #2559 does the same). */
+  private pairingRequestInFlight = false;
 
   private readonly options: ConnectionOptions;
 
@@ -116,10 +150,16 @@ export class WhatsAppConnection {
     this.options = options;
     this.events = options.events;
     this.logger = options.logger;
+    this.browser = options.browser ?? DEFAULT_BROWSER;
   }
 
   isConnected(): boolean {
     return this.connected && this.socket !== null;
+  }
+
+  /** True once the pairing handshake has started on the current socket. */
+  isPairingReady(): boolean {
+    return this.pairingReady;
   }
 
   /** Sends one text message. Throws if there is no usable socket. */
@@ -136,17 +176,105 @@ export class WhatsAppConnection {
   }
 
   /**
-   * Requests a pairing code. The code is returned to the caller (CLI) and is
-   * never logged or persisted by this class.
+   * Requests a pairing code and resolves only once WhatsApp acknowledged the
+   * `companion_hello` IQ.
+   *
+   * The code is returned to the caller (CLI) and is never logged. Unlike
+   * upstream `socket.requestPairingCode()` — which mints the code locally, emits
+   * `creds.update` and returns before the server has answered — this waits for
+   * the IQ result and rejects on a server error, so the caller never sees a code
+   * that cannot link.
    */
-  async requestPairingCode(phoneE164: string): Promise<string> {
+  async requestPairingCode(phoneE164: string, options: { readyTimeoutMs?: number } = {}): Promise<string> {
     const socket = this.socket;
-    if (!socket?.requestPairingCode) {
-      const error = new Error('socket does not support pairing codes');
-      (error as Error & { code?: string }).code = 'NO_PAIRING_SOCKET';
-      throw error;
+    if (!socket?.query) {
+      throw pairingError('NO_PAIRING_SOCKET', 'socket does not support pairing IQ queries');
     }
-    return socket.requestPairingCode(phoneE164);
+
+    if (this.pairingRequestInFlight) {
+      throw pairingError('PAIRING_IN_PROGRESS', 'a pairing request is already in progress');
+    }
+    this.pairingRequestInFlight = true;
+    try {
+      return await this.requestPairingCodeInner(socket, phoneE164, options);
+    } finally {
+      this.pairingRequestInFlight = false;
+    }
+  }
+
+  private async requestPairingCodeInner(
+    socket: SocketLike,
+    phoneE164: string,
+    options: { readyTimeoutMs?: number },
+  ): Promise<string> {
+    await this.waitForPairingReady(options.readyTimeoutMs ?? 30_000);
+
+    const current = this.socket;
+    if (current !== socket) {
+      throw pairingError('PAIRING_INTERRUPTED', 'socket was replaced while waiting to pair');
+    }
+
+    return requestPairingCodeAwaitingResult({
+      socket: {
+        query: (node: BinaryNode, timeoutMs?: number) => socket.query!(node, timeoutMs),
+        ...(socket.generateMessageTag ? { generateMessageTag: () => socket.generateMessageTag!() } : {}),
+      },
+      creds: this.options.auth.creds,
+      browser: this.browser,
+      phoneE164,
+      saveCreds: this.options.saveCreds,
+      logger: this.logger,
+    });
+  }
+
+  /** Resolves once the pairing handshake has started, or rejects on timeout. */
+  private waitForPairingReady(timeoutMs: number): Promise<void> {
+    if (this.pairingReady) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const waiter: PairingWaiter = {
+        resolve: () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve();
+        },
+        reject: (reason: string) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          reject(pairingError('PAIRING_INTERRUPTED', reason));
+        },
+      };
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        this.pairingWaiters = this.pairingWaiters.filter((entry) => entry !== waiter);
+        reject(
+          pairingError(
+            'PAIRING_INTERRUPTED',
+            `WhatsApp did not start the pairing handshake within ${timeoutMs}ms`,
+          ),
+        );
+      }, timeoutMs);
+      timer.unref?.();
+      this.pairingWaiters.push(waiter);
+    });
+  }
+
+  private markPairingReady(): void {
+    if (this.pairingReady) return;
+    this.pairingReady = true;
+    const waiters = this.pairingWaiters;
+    this.pairingWaiters = [];
+    for (const waiter of waiters) waiter.resolve();
+  }
+
+  /** Fails everyone blocked on the handshake so a disconnect never hangs the CLI. */
+  private rejectPairingWaiters(reason: string): void {
+    const waiters = this.pairingWaiters;
+    this.pairingWaiters = [];
+    for (const waiter of waiters) waiter.reject(reason);
   }
 
   async connect(): Promise<void> {
@@ -180,7 +308,7 @@ export class WhatsAppConnection {
           // needed for mappings.
           syncFullHistory: false,
           emitOwnEvents: false,
-          browser: ['CAPTSHOP Gateway', 'Chrome', '1.0.0'],
+          browser: this.browser,
           defaultQueryTimeoutMs: 60_000,
           connectTimeoutMs: 60_000,
           keepAliveIntervalMs: 25_000,
@@ -228,6 +356,13 @@ export class WhatsAppConnection {
   }
 
   private async handleConnectionUpdate(update: ConnectionUpdate): Promise<void> {
+    // The `pair-device` stanza reaches us as a `connection.update` carrying a
+    // `qr` payload; that is the moment WhatsApp is willing to accept a
+    // companion_hello pairing request.
+    if (typeof update.qr === 'string' && update.qr.length > 0) {
+      this.markPairingReady();
+    }
+
     if (update.connection === 'open') {
       this.connected = true;
       this.reconnectAttempt = 0;
@@ -251,6 +386,10 @@ export class WhatsAppConnection {
       const code = disconnectStatusCode(update.lastDisconnect?.error);
       const wasSocket = this.socket;
       this.socket = null;
+      // A new socket re-runs the handshake, so the gate must be re-armed and
+      // anyone still waiting on the old one must fail rather than hang.
+      this.pairingReady = false;
+      this.rejectPairingWaiters('the socket closed before pairing started');
       try {
         wasSocket?.end?.(undefined);
       } catch {
@@ -366,12 +505,19 @@ export function createFakeSocket(): SocketLike & {
   emitReceipts(updates: ReceiptUpdate[]): void;
   emitCreds(): void;
   sent: Array<{ jid: string; text: string }>;
+  /** Every IQ passed to `query()`, in order. */
+  queriedIqs: BinaryNode[];
   failNextSend(error: Error): void;
+  /** Makes the next `query()` reject, as an `iq type='error'` reply does. */
+  failNextQuery(error: Error): void;
   ended: boolean;
 } {
   const emitter = new EventEmitter();
   const sent: Array<{ jid: string; text: string }> = [];
+  const queriedIqs: BinaryNode[] = [];
   let nextError: Error | null = null;
+  let nextQueryError: Error | null = null;
+  let tagCounter = 0;
   let ended = false;
 
   const socket = {
@@ -391,8 +537,23 @@ export function createFakeSocket(): SocketLike & {
       sent.push({ jid, text: content.text });
       return { key: { id: `BAE-${sent.length}` } };
     },
-    async requestPairingCode() {
-      return 'FAKECODE';
+    /**
+     * Mirrors Baileys: resolves with the server's result node, or rejects when
+     * the server answered with an `iq type='error'` (Baileys throws from
+     * `assertNodeErrorFree`).
+     */
+    async query(node: BinaryNode) {
+      queriedIqs.push(node);
+      if (nextQueryError) {
+        const error = nextQueryError;
+        nextQueryError = null;
+        throw error;
+      }
+      return { tag: 'iq', attrs: { type: 'result', id: node.attrs.id ?? '' } };
+    },
+    generateMessageTag() {
+      tagCounter += 1;
+      return `FAKE-${tagCounter}`;
     },
     end() {
       ended = true;
@@ -407,8 +568,12 @@ export function createFakeSocket(): SocketLike & {
       emitter.emit('creds.update');
     },
     sent,
+    queriedIqs,
     failNextSend(error: Error) {
       nextError = error;
+    },
+    failNextQuery(error: Error) {
+      nextQueryError = error;
     },
     get ended() {
       return ended;

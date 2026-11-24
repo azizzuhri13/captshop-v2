@@ -6,7 +6,8 @@ import { createSqliteAuthStore, AuthStoreCorruptError } from '../auth-store.ts';
 import type { AuthStore } from '../auth-store.ts';
 import { SessionStore } from '../session-store.ts';
 import { normalizePhone } from '../phone.ts';
-import { WhatsAppConnection } from '../connection.ts';
+import { WhatsAppConnection, DEFAULT_BROWSER } from '../connection.ts';
+import { createPairingSession, isRetryablePairingError } from '../pairing.ts';
 
 /**
  * `npm run pair -- --phone 62...`
@@ -16,6 +17,8 @@ import { WhatsAppConnection } from '../connection.ts';
  * Guarantees:
  *  - the pairing code is written to the operator's terminal exactly once and is
  *    never logged, persisted, or echoed by any other code path;
+ *  - a code is printed only after WhatsApp acknowledged the companion_hello IQ,
+ *    so a rejected request never shows an unusable code;
  *  - the phone must be digits-only with a country code (62...);
  *  - an already-registered session is refused outright. v1 has no reset path:
  *    discarding a live session is destructive and out of scope (spec excludes
@@ -100,91 +103,75 @@ async function main(): Promise<number> {
 
   const timeoutSeconds = Math.max(30, Number.parseInt(values['timeout-seconds'] ?? '180', 10) || 180);
 
+  // Indirection so the connection (created first) can report into the pairing
+  // flow (created second) without a circular construction order.
+  const pairingEvents: { connected: () => void; loggedOut: () => void } = {
+    connected: () => {},
+    loggedOut: () => {},
+  };
+
   const connection = new WhatsAppConnection({
     auth: auth.state,
     saveCreds: auth.saveCreds,
     session,
     logger,
+    browser: DEFAULT_BROWSER,
     reconnectBaseMs: config.reconnectBaseMs,
     reconnectMaxMs: config.reconnectMaxMs,
     events: {
-      connected: () => {
-        process.stdout.write('\npaired: session is connected and credentials are stored.\n');
-        cleanup(0);
-      },
+      connected: () => pairingEvents.connected(),
       disconnected: () => {},
-      loggedOut: () => {
-        process.stderr.write('\npairing failed: WhatsApp rejected the session (logged out).\n');
-        cleanup(1);
-      },
+      loggedOut: () => pairingEvents.loggedOut(),
       receipt: () => {},
     },
   });
 
-  let done = false;
-  const cleanup = (code: number): void => {
-    if (done) return;
-    done = true;
-    void connection
-      .stop()
-      .catch(() => {})
-      .then(() => {
-        try {
-          db.close();
-        } catch {
-          // ignore
-        }
-        process.exit(code);
-      });
-  };
-
-  const timer = setTimeout(() => {
-    process.stderr.write(`\npairing timed out after ${timeoutSeconds}s; no session was registered.\n`);
-    cleanup(1);
-  }, timeoutSeconds * 1000);
-  timer.unref?.();
-
-  process.stdout.write('requesting pairing code...\n');
-  await connection.connect();
-
-  // The socket needs a moment to open before a code can be requested.
-  const code = await withRetry(() => connection.requestPairingCode(phone.e164), 8, 1_000).catch(
-    (error: unknown) => {
-      const message = error instanceof Error ? error.message : 'unknown error';
-      process.stderr.write(`error: could not obtain a pairing code (${message})\n`);
-      return null;
+  const pairing = createPairingSession({
+    timeoutSeconds,
+    stdout: (text) => process.stdout.write(text),
+    stderr: (text) => process.stderr.write(text),
+    connect: () => connection.connect(),
+    requestPairingCode: () => requestPairingCodeWithRetry(connection, phone.e164),
+    stop: async () => {
+      await connection.stop();
+      try {
+        db.close();
+      } catch {
+        // already closed
+      }
     },
-  );
+  });
 
-  if (code === null) {
-    cleanup(1);
-    return 1;
-  }
+  pairingEvents.connected = pairing.events.connected;
+  pairingEvents.loggedOut = pairing.events.loggedOut;
 
-  // The only place the code is ever printed. Not logged, not persisted.
-  process.stdout.write(
-    `\n  pairing code: ${code}\n\n` +
-      '  Enter it in WhatsApp > Linked devices > Link with phone number.\n' +
-      '  The code is shown once and is not stored anywhere.\n\n',
-  );
-
-  // Keep the process alive until connected/timeout; cleanup() exits.
-  await new Promise<void>(() => {});
-  return 0;
+  return pairing.run();
 }
 
-async function withRetry<T>(fn: () => Promise<T>, attempts: number, delayMs: number): Promise<T> {
+const code = await main();
+process.exitCode = code;
+
+/**
+ * Retries only when the pairing handshake was interrupted before anything
+ * reached WhatsApp (a socket swap/reconnect). A server rejection is final:
+ * retrying it would burn WhatsApp's pairing attempts and re-print a code that
+ * cannot link.
+ */
+async function requestPairingCodeWithRetry(
+  connection: WhatsAppConnection,
+  phoneE164: string,
+  attempts = 8,
+  delayMs = 1_000,
+): Promise<string> {
   let lastError: unknown;
-  for (let i = 0; i < attempts; i += 1) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      return await fn();
+      return await connection.requestPairingCode(phoneE164);
     } catch (error) {
       lastError = error;
+      if (!isRetryablePairingError(error)) throw error;
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }
   throw lastError;
 }
-
-const code = await main();
-process.exitCode = code;
