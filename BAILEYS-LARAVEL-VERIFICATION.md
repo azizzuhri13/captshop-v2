@@ -37,7 +37,12 @@ A temporary local process ran on 127.0.0.1 with Baileys auto-connect disabled. T
 - Initial review identified a LOW finding: Laravel send adapter lacked a loopback-only URL allowlist.
 - Fixed with `LocalGatewayUrl::sanitize()` used by both send and status paths; invalid URLs fail closed before attaching/sending the internal key.
 - Narrow security re-review card `t_081bd759`: **APPROVED** for the reviewed local snapshot; no deployment approval implied.
-- Carried residuals: SQLite outbox stores destination/message plaintext (directory/file modes 0700/0600 are best-effort); no real Baileys pairing/send was exercised; gateway is still uncommitted and has no Git SHA anchor.
+- Carried residuals: SQLite outbox stores destination/message plaintext (directory/file modes 0700/0600 are best-effort); no real Baileys pairing/send was exercised.
+
+## Bundled gateway and release anchor
+- The gateway source now ships inside this repository at `wa-gateway/` (non-public directory; no `node_modules`, no `dist/`, no `data/`), so the deployed Laravel code and its gateway are reproducible from one SHA.
+- Port default reconciled to `127.0.0.1:3213` (gateway `src/config.ts`, `.env.example`, README) and Laravel `config/services.php` / `.env.example`; `3211` is occupied by an unrelated `next-server` and is not used.
+- Release anchor: commit `110ff63` on branch `feat/baileys-gateway-laravel` (pushed to `origin`, not merged to `master`).
 
 ## Operational status
-Local implementation only. No migration was run against production, no live `.env` was edited, no PM2 service was created, no commit/push/deploy occurred, no WhatsApp account was paired, and `next.captshop.id` remains untouched. Production use still requires explicit deployment/pairing authorization and the owner's dedicated WhatsApp number/device.
+Deployment state for this card is recorded on the kanban task; no WhatsApp account was paired and `next.captshop.id` remains untouched. Production use still requires explicit pairing authorization and the owner's dedicated WhatsApp number/device.

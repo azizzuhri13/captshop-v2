@@ -104,7 +104,7 @@ npm run status
 npm start
 ```
 
-Binds `127.0.0.1:3211` by default. Handles `SIGINT`/`SIGTERM` with a graceful
+Binds `127.0.0.1:3213` by default. Handles `SIGINT`/`SIGTERM` with a graceful
 shutdown that releases any claimed work back to `failed_retryable` before exit.
 
 ## HTTP interface
